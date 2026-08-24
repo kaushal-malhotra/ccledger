@@ -1,0 +1,741 @@
+{
+  "resourceLogs": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "host.arch",
+            "value": {
+              "stringValue": "amd64"
+            }
+          },
+          {
+            "key": "os.type",
+            "value": {
+              "stringValue": "windows"
+            }
+          },
+          {
+            "key": "os.version",
+            "value": {
+              "stringValue": "10.0.26200"
+            }
+          },
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "claude-code"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "2.1.241"
+            }
+          }
+        ],
+        "droppedAttributesCount": 0
+      },
+      "scopeLogs": [
+        {
+          "scope": {
+            "name": "com.anthropic.claude_code.events",
+            "version": "2.1.241"
+          },
+          "logRecords": [
+            {
+              "timeUnixNano": "1787503989413000000",
+              "observedTimeUnixNano": "1787503989413000000",
+              "body": {
+                "stringValue": "claude_code.plugin_loaded"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "aa83f64c6c308f626d85d6deae05eaecdba5eb615a4eea59c16587dd417a6396"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "bc697788-f3f4-493b-80cc-2a03174c8861"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "11111111-1111-4111-8111-111111111111"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "teammate@example.invalid"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "22222222-2222-4222-8222-222222222222"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_012FIXTUREACCOUNTID000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "vscode"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "plugin_loaded"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-08-23T16:53:09.413Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 0
+                  }
+                },
+                {
+                  "key": "plugin.name",
+                  "value": {
+                    "stringValue": "frontend-design"
+                  }
+                },
+                {
+                  "key": "marketplace.name",
+                  "value": {
+                    "stringValue": "claude-plugins-official"
+                  }
+                },
+                {
+                  "key": "plugin.scope",
+                  "value": {
+                    "stringValue": "official"
+                  }
+                },
+                {
+                  "key": "enabled_via",
+                  "value": {
+                    "stringValue": "user-install"
+                  }
+                },
+                {
+                  "key": "plugin_id_hash",
+                  "value": {
+                    "stringValue": "1b75a30579d469e6"
+                  }
+                },
+                {
+                  "key": "has_hooks",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "has_mcp",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "host_owned_mcp",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "skill_path_count",
+                  "value": {
+                    "intValue": 1
+                  }
+                },
+                {
+                  "key": "command_path_count",
+                  "value": {
+                    "intValue": 0
+                  }
+                },
+                {
+                  "key": "agent_path_count",
+                  "value": {
+                    "intValue": 0
+                  }
+                },
+                {
+                  "key": "safe_mode",
+                  "value": {
+                    "stringValue": "false"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1787503990068000000",
+              "observedTimeUnixNano": "1787503990068000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "aa83f64c6c308f626d85d6deae05eaecdba5eb615a4eea59c16587dd417a6396"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "bc697788-f3f4-493b-80cc-2a03174c8861"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "11111111-1111-4111-8111-111111111111"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "teammate@example.invalid"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "22222222-2222-4222-8222-222222222222"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_012FIXTUREACCOUNTID000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "vscode"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-08-23T16:53:10.068Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 1
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "connected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "claudeai-proxy"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "claudeai"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "28"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1787503991194000000",
+              "observedTimeUnixNano": "1787503991194000000",
+              "body": {
+                "stringValue": "claude_code.api_request"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "aa83f64c6c308f626d85d6deae05eaecdba5eb615a4eea59c16587dd417a6396"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "bc697788-f3f4-493b-80cc-2a03174c8861"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "11111111-1111-4111-8111-111111111111"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "teammate@example.invalid"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "22222222-2222-4222-8222-222222222222"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_012FIXTUREACCOUNTID000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "vscode"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "api_request"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-08-23T16:53:11.194Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 2
+                  }
+                },
+                {
+                  "key": "model",
+                  "value": {
+                    "stringValue": "claude-haiku-4-5-20251001"
+                  }
+                },
+                {
+                  "key": "input_tokens",
+                  "value": {
+                    "intValue": 898
+                  }
+                },
+                {
+                  "key": "output_tokens",
+                  "value": {
+                    "intValue": 13
+                  }
+                },
+                {
+                  "key": "cache_read_tokens",
+                  "value": {
+                    "intValue": 0
+                  }
+                },
+                {
+                  "key": "cache_creation_tokens",
+                  "value": {
+                    "intValue": 0
+                  }
+                },
+                {
+                  "key": "cost_usd",
+                  "value": {
+                    "doubleValue": 0.000963
+                  }
+                },
+                {
+                  "key": "cost_usd_micros",
+                  "value": {
+                    "intValue": 963
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "intValue": 1014
+                  }
+                },
+                {
+                  "key": "request_id",
+                  "value": {
+                    "stringValue": "req_011CeL2bXveDkmU34ZSs7Tev"
+                  }
+                },
+                {
+                  "key": "client_request_id",
+                  "value": {
+                    "stringValue": "f1f6314c-4ac2-4e04-afc4-6e2b7b477bd6"
+                  }
+                },
+                {
+                  "key": "speed",
+                  "value": {
+                    "stringValue": "normal"
+                  }
+                },
+                {
+                  "key": "query_source",
+                  "value": {
+                    "stringValue": "generate_session_title"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1787503991194000000",
+              "observedTimeUnixNano": "1787503991194000000",
+              "body": {
+                "stringValue": "claude_code.assistant_response"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "aa83f64c6c308f626d85d6deae05eaecdba5eb615a4eea59c16587dd417a6396"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "bc697788-f3f4-493b-80cc-2a03174c8861"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "11111111-1111-4111-8111-111111111111"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "teammate@example.invalid"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "22222222-2222-4222-8222-222222222222"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_012FIXTUREACCOUNTID000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "vscode"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "assistant_response"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-08-23T16:53:11.194Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 3
+                  }
+                },
+                {
+                  "key": "response_length",
+                  "value": {
+                    "intValue": 31
+                  }
+                },
+                {
+                  "key": "response",
+                  "value": {
+                    "stringValue": "<REDACTED>"
+                  }
+                },
+                {
+                  "key": "request_id",
+                  "value": {
+                    "stringValue": "req_011CeL2bXveDkmU34ZSs7Tev"
+                  }
+                },
+                {
+                  "key": "message.uuid",
+                  "value": {
+                    "stringValue": "6ea27647-0507-4db3-936e-64a6ae7cb611"
+                  }
+                },
+                {
+                  "key": "model",
+                  "value": {
+                    "stringValue": "claude-haiku-4-5-20251001"
+                  }
+                },
+                {
+                  "key": "query_source",
+                  "value": {
+                    "stringValue": "generate_session_title"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1787503992225000000",
+              "observedTimeUnixNano": "1787503992225000000",
+              "body": {
+                "stringValue": "claude_code.user_prompt"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "aa83f64c6c308f626d85d6deae05eaecdba5eb615a4eea59c16587dd417a6396"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "bc697788-f3f4-493b-80cc-2a03174c8861"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "11111111-1111-4111-8111-111111111111"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "teammate@example.invalid"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "22222222-2222-4222-8222-222222222222"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_012FIXTUREACCOUNTID000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "vscode"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "user_prompt"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-08-23T16:53:12.225Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 4
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "4fc4bb31-78d6-48ed-8d5c-13c3417a6f4f"
+                  }
+                },
+                {
+                  "key": "prompt_length",
+                  "value": {
+                    "stringValue": "26"
+                  }
+                },
+                {
+                  "key": "prompt",
+                  "value": {
+                    "stringValue": "<REDACTED>"
+                  }
+                },
+                {
+                  "key": "message.uuid",
+                  "value": {
+                    "stringValue": "580e18e5-9012-45dd-a9e0-0fabeab9cb2e"
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            },
+            {
+              "timeUnixNano": "1787503992281000000",
+              "observedTimeUnixNano": "1787503992281000000",
+              "body": {
+                "stringValue": "claude_code.mcp_server_connection"
+              },
+              "attributes": [
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "aa83f64c6c308f626d85d6deae05eaecdba5eb615a4eea59c16587dd417a6396"
+                  }
+                },
+                {
+                  "key": "session.id",
+                  "value": {
+                    "stringValue": "bc697788-f3f4-493b-80cc-2a03174c8861"
+                  }
+                },
+                {
+                  "key": "organization.id",
+                  "value": {
+                    "stringValue": "11111111-1111-4111-8111-111111111111"
+                  }
+                },
+                {
+                  "key": "user.email",
+                  "value": {
+                    "stringValue": "teammate@example.invalid"
+                  }
+                },
+                {
+                  "key": "user.account_uuid",
+                  "value": {
+                    "stringValue": "22222222-2222-4222-8222-222222222222"
+                  }
+                },
+                {
+                  "key": "user.account_id",
+                  "value": {
+                    "stringValue": "user_012FIXTUREACCOUNTID000"
+                  }
+                },
+                {
+                  "key": "terminal.type",
+                  "value": {
+                    "stringValue": "vscode"
+                  }
+                },
+                {
+                  "key": "event.name",
+                  "value": {
+                    "stringValue": "mcp_server_connection"
+                  }
+                },
+                {
+                  "key": "event.timestamp",
+                  "value": {
+                    "stringValue": "2026-08-23T16:53:12.281Z"
+                  }
+                },
+                {
+                  "key": "event.sequence",
+                  "value": {
+                    "intValue": 5
+                  }
+                },
+                {
+                  "key": "prompt.id",
+                  "value": {
+                    "stringValue": "4fc4bb31-78d6-48ed-8d5c-13c3417a6f4f"
+                  }
+                },
+                {
+                  "key": "status",
+                  "value": {
+                    "stringValue": "connected"
+                  }
+                },
+                {
+                  "key": "transport_type",
+                  "value": {
+                    "stringValue": "claudeai-proxy"
+                  }
+                },
+                {
+                  "key": "server_scope",
+                  "value": {
+                    "stringValue": "claudeai"
+                  }
+                },
+                {
+                  "key": "duration_ms",
+                  "value": {
+                    "stringValue": "2242"
+                  }
+                },
+                {
+                  "key": "is_plugin",
+                  "value": {
+                    "boolValue": false
+                  }
+                }
+              ],
+              "droppedAttributesCount": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
