@@ -17,11 +17,14 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
 
-    "rootDir": "src",
     "outDir": "dist",
     "declaration": true,
     "sourceMap": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist", "web", "test"]
+  // `test/` is in scope so the cross-cutting integration test is type-checked by
+  // `npm run typecheck`; without it `tsc --noEmit` passes on code it never read.
+  // `rootDir` therefore lives in `tsconfig.build.json`, which is the only config
+  // that emits and the only one whose file set is `src/` alone.
+  "include": ["src", "test"],
+  "exclude": ["node_modules", "dist", "web"]
 }

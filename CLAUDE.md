@@ -57,8 +57,10 @@ test/
 ```
 
 `web/` builds into `src/server/public`, which the Fastify app serves as static
-assets. Types crossing the cli/server boundary live in `src/shared/` — neither
-side imports from the other directly.
+assets. Types crossing the cli/server boundary live in `src/shared/`, and the
+dependency runs one way: `src/cli/` composes the server through its public
+entrypoint (`buildApp`), `src/server/` never imports from `src/cli/`, and
+anything both need is `src/shared/` rather than an import across.
 
 ## Conventions
 

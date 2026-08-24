@@ -25,10 +25,7 @@ export interface ResourceInfo {
 
 /** Which field the event timestamp was taken from, most trusted first. */
 export type TimestampSource =
-  | 'event.timestamp'
-  | 'timeUnixNano'
-  | 'observedTimeUnixNano'
-  | 'missing';
+  'event.timestamp' | 'timeUnixNano' | 'observedTimeUnixNano' | 'missing';
 
 /** Fields every parsed Claude Code event carries, whatever its type. */
 export interface BaseEvent {
