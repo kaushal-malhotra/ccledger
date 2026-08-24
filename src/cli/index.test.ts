@@ -13,6 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildProgram } from './index.js';
+import { baseUrl, lanAddresses, mdnsHost, resolvePublicUrl, shortHostname } from './serve.js';
 import { VERSION } from '../shared/version.js';
 
 const tempPaths: string[] = [];
@@ -33,20 +34,26 @@ function tempDbPath(): string {
 }
 
 /**
- * Parses argv without running the action, and returns the serve options
- * Commander resolved. `exitOverride` turns Commander's `process.exit` into a
- * throw, so a parse failure fails the test instead of killing the runner.
+ * Parses argv without running the action, and returns the options Commander
+ * resolved for the named subcommand. `exitOverride` turns Commander's
+ * `process.exit` into a throw, so a parse failure fails the test instead of
+ * killing the runner.
  */
-function parseServe(argv: readonly string[]): Record<string, unknown> {
+function parseCommand(name: string, argv: readonly string[]): Record<string, unknown> {
   const program = buildProgram();
   program.exitOverride();
-  const serve = program.commands.find((command) => command.name() === 'serve');
-  if (serve === undefined) throw new Error('no serve command');
-  serve.exitOverride();
-  // Replace the action so parsing does not start a server.
-  serve.action(() => undefined);
+  const command = program.commands.find((candidate) => candidate.name() === name);
+  if (command === undefined) throw new Error(`no ${name} command`);
+  command.exitOverride();
+  // Replace the action so parsing neither starts a server nor opens a database.
+  command.action(() => undefined);
   program.parse(['node', 'ccledger', ...argv]);
-  return serve.opts();
+  return command.opts();
+}
+
+/** `parseCommand` for `serve`, which most of this file is about. */
+function parseServe(argv: readonly string[]): Record<string, unknown> {
+  return parseCommand('serve', argv);
 }
 
 describe('buildProgram', () => {
@@ -58,35 +65,71 @@ describe('buildProgram', () => {
     expect(VERSION).not.toBe('0.0.0');
   });
 
-  it('exposes serve, and does not stub the stage 2 and 3 commands', () => {
+  it('exposes serve and invite, and does not stub the stage 3 commands', () => {
     const names = buildProgram()
       .commands.map((command) => command.name())
       .sort();
 
     expect(names).toContain('serve');
-    for (const later of ['invite', 'setup', 'doctor', 'uninstall']) {
+    expect(names).toContain('invite');
+    for (const later of ['setup', 'doctor', 'uninstall']) {
       expect(names).not.toContain(later);
     }
   });
 });
 
 describe('serve options', () => {
-  it('defaults to the OTLP port, loopback, and a database in the working directory', () => {
+  it('defaults to the OTLP port, every interface, laptop mode, and a local database', () => {
     const options = parseServe(['serve']);
 
     expect(options['port']).toBe(4318);
-    expect(options['host']).toBe('127.0.0.1');
+    // Every interface, not loopback: laptop mode exists so teammates on the LAN
+    // can reach it, and every route but /health and /join now needs a token.
+    expect(options['host']).toBe('0.0.0.0');
+    expect(options['mode']).toBe('laptop');
     expect(options['db']).toBe('./ccledger.db');
+    expect(options['publicUrl']).toBeUndefined();
+    expect(options['rotateAdminToken']).toBeUndefined();
   });
 
   it('takes the flags it is given', () => {
     const path = tempDbPath();
 
-    const options = parseServe(['serve', '--port', '4399', '--host', '0.0.0.0', '--db', path]);
+    const options = parseServe([
+      'serve',
+      '--port',
+      '4399',
+      '--host',
+      '127.0.0.1',
+      '--db',
+      path,
+      '--mode',
+      'vps',
+      '--public-url',
+      'https://meter.example.com',
+      '--name',
+      'Team server',
+      '--rotate-admin-token',
+    ]);
 
     expect(options['port']).toBe(4399);
-    expect(options['host']).toBe('0.0.0.0');
+    expect(options['host']).toBe('127.0.0.1');
     expect(options['db']).toBe(path);
+    expect(options['mode']).toBe('vps');
+    expect(options['publicUrl']).toBe('https://meter.example.com');
+    expect(options['name']).toBe('Team server');
+    expect(options['rotateAdminToken']).toBe(true);
+  });
+
+  it.each([
+    ['unknown', 'cloud'],
+    ['empty', ''],
+  ])('rejects a %s mode rather than guessing one', (_label, mode) => {
+    expect(() => parseServe(['serve', '--mode', mode])).toThrow();
+  });
+
+  it('accepts a mode in any case, because a flag is not a secret', () => {
+    expect(parseServe(['serve', '--mode', 'VPS'])['mode']).toBe('vps');
   });
 
   it('parses the port to a number, not a string', () => {
@@ -104,5 +147,75 @@ describe('serve options', () => {
     ['empty', ''],
   ])('rejects a %s port rather than binding something unintended', (_label, port) => {
     expect(() => parseServe(['serve', '--port', port])).toThrow();
+  });
+});
+
+describe('invite options', () => {
+  it('defaults to the same database serve uses and no endpoint of its own', () => {
+    const options = parseCommand('invite', ['invite', 'Alice']);
+
+    expect(options['db']).toBe('./ccledger.db');
+    expect(options['endpoint']).toBeUndefined();
+  });
+
+  it('takes an explicit endpoint, for a server it has never run beside', () => {
+    const options = parseCommand('invite', [
+      'invite',
+      'Alice',
+      '--endpoint',
+      'https://meter.example.com',
+    ]);
+
+    expect(options['endpoint']).toBe('https://meter.example.com');
+  });
+
+  it('requires a display name', () => {
+    expect(() => parseCommand('invite', ['invite'])).toThrow();
+  });
+});
+
+describe('the URLs serve prints', () => {
+  it('turns a bind address into something a teammate can paste', () => {
+    expect(baseUrl('0.0.0.0', 4318)).toBe('http://localhost:4318');
+    expect(baseUrl('::', 4318)).toBe('http://localhost:4318');
+    expect(baseUrl('192.168.1.20', 4318)).toBe('http://192.168.1.20:4318');
+    // A bare IPv6 literal has to be bracketed or the port reads as another group.
+    expect(baseUrl('fe80::1', 4318)).toBe('http://[fe80::1]:4318');
+  });
+
+  it('derives an mDNS name from the short machine name only', () => {
+    expect(shortHostname('Desk-01')).toBe('desk-01');
+    expect(shortHostname('desk-01.corp.example.com')).toBe('desk-01');
+    expect(shortHostname('  ')).toBe('localhost');
+    expect(mdnsHost('Desk-01')).toBe('desk-01.local');
+    expect(mdnsHost('desk-01.corp.example.com')).toBe('desk-01.local');
+    // Nothing gains a `.local` it would not answer to.
+    expect(mdnsHost('')).toBe('localhost');
+  });
+
+  it('guesses an mDNS URL in laptop mode and refuses to guess in VPS mode', () => {
+    expect(resolvePublicUrl({ mode: 'laptop', port: 4318 })).toBe(`http://${mdnsHost()}:4318`);
+    // Behind a proxy the process cannot know its own public name, and an invite
+    // carrying a container's own address is an invite that cannot work.
+    expect(resolvePublicUrl({ mode: 'vps', port: 4318 })).toBeUndefined();
+  });
+
+  it('offers every real address rather than picking one that may be virtual', () => {
+    const addresses = lanAddresses();
+
+    for (const address of addresses) {
+      expect(address).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/);
+    }
+    // Loopback is internal, and printing it as the address teammates should
+    // use would send every one of them to their own machine.
+    expect(addresses).not.toContain('127.0.0.1');
+    expect(new Set(addresses).size).toBe(addresses.length);
+  });
+
+  it('prefers an explicit public URL and normalises it', () => {
+    expect(
+      resolvePublicUrl({ mode: 'laptop', port: 4318, publicUrl: 'https://meter.example.com/' }),
+    ).toBe('https://meter.example.com');
+    expect(resolvePublicUrl({ mode: 'vps', port: 4318, publicUrl: 'not a url' })).toBeUndefined();
   });
 });
