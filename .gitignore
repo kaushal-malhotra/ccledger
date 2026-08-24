@@ -1,0 +1,13 @@
+node_modules/
+dist/
+src/server/public/
+*.db
+*.db-wal
+*.db-shm
+.env
+.DS_Store
+coverage/
+
+# Raw stage-0 OTLP captures: contain the capturing account's real email and
+# account identifiers. Sanitised copies live in test/fixtures/.
+captures/
