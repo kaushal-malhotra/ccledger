@@ -159,3 +159,51 @@ export interface IngestResult {
   /** Count per event name that ccledger does not recognise. */
   readonly unknownEvents: Readonly<Record<string, number>>;
 }
+
+/** How a server is deployed, which decides its defaults and its warnings. */
+export type ServerMode = 'laptop' | 'vps';
+
+/** A member row as the rest of the program sees it, camel-cased. */
+export interface Member {
+  readonly id: string;
+  readonly displayName: string;
+  /** Epoch milliseconds. */
+  readonly createdAt: number;
+  /** Epoch milliseconds, or `null` while the member is active. */
+  readonly revokedAt: number | null;
+  /** Machine name the token was first issued for. Informational only. */
+  readonly joinHostname: string | null;
+  /** OS the token was first issued on. Informational only. */
+  readonly joinOs: string | null;
+}
+
+/** The body `POST /join` accepts. Snake case, because a shell client types it. */
+export interface JoinRequestBody {
+  /** A join code in any spacing or case; normalised server-side. */
+  readonly code: string;
+  readonly display_name: string;
+  readonly hostname?: string;
+  readonly os?: string;
+}
+
+/** The body `POST /join` returns. The token is shown here and never again. */
+export interface JoinResponseBody {
+  readonly token: string;
+  readonly member_id: string;
+  readonly server_name: string;
+}
+
+/**
+ * What an invite string carries. Encoded as one base64url blob so a teammate
+ * has exactly one thing to paste, per PRD section 6.
+ */
+export interface InvitePayload {
+  /** Format version. Bumped if the shape ever changes. */
+  readonly v: 1;
+  /** Base URL of the server, with no trailing slash and no `/v1/logs`. */
+  readonly endpoint: string;
+  /** The join code, canonical form. */
+  readonly code: string;
+  /** Display name the admin suggested. The joiner may override it. */
+  readonly name?: string;
+}

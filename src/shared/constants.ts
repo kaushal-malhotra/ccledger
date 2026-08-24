@@ -47,8 +47,10 @@ export const KNOWN_EVENT_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Placeholder member owning every row until bearer-token auth lands in stage 2.
- * Seeded by the migrations so the `requests.member_id` foreign key holds.
+ * Placeholder member seeded by migration 2, back when ingest was unauthenticated.
+ * Nothing writes rows against it any more — `ingestEvents` takes the member id
+ * the bearer token resolved to — but the row stays because migrations are
+ * forward-only and stage 1 rows still point at it.
  */
 export const UNATTRIBUTED_MEMBER_ID = 'unattributed';
 
@@ -61,3 +63,67 @@ export const UNATTRIBUTED_MEMBER_NAME = 'Unattributed';
  * it and no bearer token can ever authenticate as the placeholder.
  */
 export const UNATTRIBUTED_TOKEN_HASH = 'none:unattributed';
+
+/**
+ * Prefix on a member's ingest token. A teammate pastes this into a Claude Code
+ * settings file, so it is worth being able to recognise one on sight.
+ */
+export const MEMBER_TOKEN_PREFIX = 'ccm_';
+
+/**
+ * Prefix on the single admin token. Deliberately different from the member
+ * prefix: the two are stored in different places and grant different things,
+ * and the failure mode worth designing against is an admin pasting their own
+ * token into a teammate's config. A different prefix makes that visible.
+ */
+export const ADMIN_TOKEN_PREFIX = 'cca_';
+
+/**
+ * Random characters after the prefix. 24 random bytes render as exactly 32
+ * base64url characters with no padding, which is 192 bits of entropy.
+ */
+export const TOKEN_BODY_LENGTH = 32;
+
+/** Bytes of randomness behind `TOKEN_BODY_LENGTH` base64url characters. */
+export const TOKEN_ENTROPY_BYTES = 24;
+
+/** The `server_config` key holding the sha256 of the current admin token. */
+export const CONFIG_ADMIN_TOKEN_HASH = 'admin_token_hash';
+
+/** The `server_config` key holding when the admin token was last issued. */
+export const CONFIG_ADMIN_TOKEN_SET_AT = 'admin_token_set_at';
+
+/** The `server_config` key holding the label shown to a joining teammate. */
+export const CONFIG_SERVER_NAME = 'server_name';
+
+/**
+ * The `server_config` key holding the base URL teammates reach this server on.
+ * `serve` writes it; `invite` reads it, which is what lets `ccledger invite`
+ * bundle an endpoint without being told one every time.
+ */
+export const CONFIG_PUBLIC_URL = 'public_url';
+
+/**
+ * Join-code alphabet: uppercase alphanumerics minus `0`, `O`, `1`, `I` and `L`.
+ * 31 characters, so a twelve-character code carries just under 60 bits — far
+ * past guessing, while staying readable over a desk or a phone call.
+ */
+export const JOIN_CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
+
+/** Groups a join code is printed in. */
+export const JOIN_CODE_GROUPS = 3;
+
+/** Characters per group. */
+export const JOIN_CODE_GROUP_LENGTH = 4;
+
+/** Separator between groups in the canonical form. */
+export const JOIN_CODE_SEPARATOR = '-';
+
+/** How long a join code stays claimable. PRD section 11: single use, 24 hours. */
+export const JOIN_CODE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Path prefix the admin token guards. Enforced as a prefix rather than per
+ * route so a route added later is guarded by default rather than on remembering.
+ */
+export const ADMIN_API_PREFIX = '/api';
