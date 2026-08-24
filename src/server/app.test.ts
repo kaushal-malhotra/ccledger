@@ -20,12 +20,37 @@ import { migratedDatabase } from '../db/index.js';
 import type { Database } from '../db/index.js';
 import { DROPPED_ATTRIBUTE_KEYS } from '../shared/constants.js';
 import { buildApp } from './app.js';
+import {
+  ensureAdminToken,
+  generateAdminToken,
+  generateMemberToken,
+  hashToken,
+  revokeMember,
+} from './auth.js';
+import { createJoinCodeStore } from '../db/joincodes.js';
+import { JOIN_CODE_TTL_MS } from '../shared/constants.js';
+import type { JoinResponseBody } from '../shared/types.js';
 
 /** The exact bytes an OTLP exporter must see for a fully accepted batch. */
 const SUCCESS_BODY = '{"partialSuccess":{}}';
 
 /** The default `Content-Type` an OTLP/HTTP JSON exporter sends. */
 const JSON_HEADERS: Readonly<Record<string, string>> = { 'content-type': 'application/json' };
+
+/**
+ * The ingest token every request in this file carries. One per run rather than
+ * one per app, so `postLogs` can attach it without threading a harness through
+ * every call — what is under test here is the body handling, not who sent it.
+ */
+const MEMBER_TOKEN = generateMemberToken();
+
+/** The member `MEMBER_TOKEN` belongs to. */
+const MEMBER_ID = 'm_fixture_alice';
+
+/** The header that makes a request authenticated. */
+const AUTH_HEADER: Readonly<Record<string, string>> = {
+  authorization: `Bearer ${MEMBER_TOKEN}`,
+};
 
 /**
  * The four values `test/fixtures/README.md` says were substituted for real PII.
@@ -80,10 +105,18 @@ afterEach(async () => {
 function freshApp(bodyLimit?: number): Harness {
   const db = migratedDatabase(':memory:');
   openHandles.push(db);
+  seedMember(db, MEMBER_ID, MEMBER_TOKEN);
   // `exactOptionalPropertyTypes` forbids passing `bodyLimit: undefined`.
   const app = buildApp(bodyLimit === undefined ? { db } : { db, bodyLimit });
   openApps.push(app);
   return { app, db };
+}
+
+/** Inserts a member whose token is known, so requests can be authenticated. */
+function seedMember(db: Database.Database, id: string, token: string, revokedAt?: number): void {
+  db.prepare(
+    'INSERT INTO members (id, display_name, token_hash, created_at, revoked_at) VALUES (?, ?, ?, ?, ?)',
+  ).run(id, id, hashToken(token), 1_700_000_000_000, revokedAt ?? null);
 }
 
 /** A checked-in capture, read relative to this file so `cwd` cannot matter. */
@@ -105,13 +138,22 @@ function packageVersion(): string {
   throw new Error('package.json has no version');
 }
 
-/** POSTs one body to the ingest route. */
+/**
+ * POSTs one authenticated body to the ingest route. The bearer header is added
+ * rather than taken from `headers`, so a test that overrides the content type
+ * does not silently lose its credentials and start asserting against a 401.
+ */
 async function postLogs(
   app: FastifyInstance,
   payload: string | Buffer,
   headers: Readonly<Record<string, string>> = JSON_HEADERS,
 ): Promise<LightMyRequestResponse> {
-  return app.inject({ method: 'POST', url: '/v1/logs', headers: { ...headers }, payload });
+  return app.inject({
+    method: 'POST',
+    url: '/v1/logs',
+    headers: { ...AUTH_HEADER, ...headers },
+    payload,
+  });
 }
 
 /** Rows currently in `requests`. */
@@ -456,7 +498,7 @@ describe('POST /v1/logs — rejected bodies', () => {
     const noPayloadAtAll = await app.inject({
       method: 'POST',
       url: '/v1/logs',
-      headers: { ...JSON_HEADERS },
+      headers: { ...AUTH_HEADER, ...JSON_HEADERS },
     });
 
     expect(withType.statusCode).toBe(400);
@@ -572,5 +614,333 @@ describe('response bodies leak nothing', () => {
         expect(response.body).not.toContain(key);
       }
     }
+  });
+});
+
+describe('POST /v1/logs — authentication', () => {
+  /** The ingest route with no `Authorization` header at all. */
+  async function postWithout(
+    app: FastifyInstance,
+    payload: string | Buffer,
+    headers: Readonly<Record<string, string>> = JSON_HEADERS,
+  ): Promise<LightMyRequestResponse> {
+    return app.inject({ method: 'POST', url: '/v1/logs', headers: { ...headers }, payload });
+  }
+
+  it('answers 401 with a challenge when there is no token', async () => {
+    const { app, db } = freshApp();
+
+    const response = await postWithout(app, fixture('001.json'));
+
+    expect(response.statusCode).toBe(401);
+    // A 401 without this is a status code with no instruction attached.
+    expect(response.headers['www-authenticate']).toBe('Bearer');
+    expect(requestCount(db)).toBe(0);
+  });
+
+  it.each([
+    ['a token nobody was issued', generateMemberToken()],
+    ['an admin token, which is a token for something else', generateAdminToken()],
+    ['a hex digest, in case a hash was pasted in place of a token', hashToken('x')],
+    ['something that is not a token', 'hunter2'],
+    ['an empty token', ''],
+  ])('answers 401 for %s', async (_label, token) => {
+    const { app, db } = freshApp();
+
+    const response = await postWithout(app, fixture('001.json'), {
+      ...JSON_HEADERS,
+      authorization: `Bearer ${token}`,
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(requestCount(db)).toBe(0);
+  });
+
+  it('answers 401 for a header that is not a Bearer header', async () => {
+    const { app } = freshApp();
+
+    const response = await postWithout(app, fixture('001.json'), {
+      ...JSON_HEADERS,
+      authorization: `Basic ${MEMBER_TOKEN}`,
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('answers 403 for a revoked member, which is a different instruction', async () => {
+    const { app, db } = freshApp();
+    revokeMember(db, MEMBER_ID, 1_700_000_001_000);
+
+    const response = await postLogs(app, fixture('001.json'));
+
+    // 401 means "your config is wrong"; 403 means "ask your admin". Both are
+    // 4xx, so an OTLP exporter drops the batch rather than retrying for ever.
+    expect(response.statusCode).toBe(403);
+    expect(response.json<ErrorBody>().error).toMatch(/revoked/);
+    expect(requestCount(db)).toBe(0);
+  });
+
+  it('attributes every row to the member the token resolved to', async () => {
+    const { app, db } = freshApp();
+
+    await postLogs(app, fixture('001.json'));
+
+    const owners = db
+      .prepare('SELECT DISTINCT member_id AS id FROM requests')
+      .all()
+      .map((row) => (row as { id: string }).id);
+    const installOwners = db
+      .prepare('SELECT DISTINCT member_id AS id FROM installs')
+      .all()
+      .map((row) => (row as { id: string }).id);
+
+    expect(owners).toEqual([MEMBER_ID]);
+    expect(installOwners).toEqual([MEMBER_ID]);
+  });
+
+  it('refuses before the body is read, not after', async () => {
+    // 4 KiB against a 1 KiB limit. With authentication after parsing this would
+    // be a 413, which means the process spooled a body for a caller it had no
+    // reason to trust.
+    const { app } = freshApp(1024);
+
+    const response = await postWithout(app, 'x'.repeat(4096));
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('never answers 5xx for any way the credentials can be wrong', async () => {
+    const { app, db } = freshApp();
+    revokeMember(db, MEMBER_ID, 1_700_000_001_000);
+
+    const statuses: number[] = [];
+    for (const header of [
+      undefined,
+      '',
+      'Bearer',
+      'Bearer ',
+      `Bearer ${generateMemberToken()}`,
+      `Bearer ${MEMBER_TOKEN}`,
+      'Basic abc',
+      'Bearer a b',
+    ]) {
+      const response = await postWithout(
+        app,
+        fixture('001.json'),
+        header === undefined ? JSON_HEADERS : { ...JSON_HEADERS, authorization: header },
+      );
+      statuses.push(response.statusCode);
+    }
+
+    expect(statuses.filter((code) => code >= 500)).toEqual([]);
+    expect(statuses.every((code) => code === 401 || code === 403)).toBe(true);
+  });
+});
+
+describe('POST /join', () => {
+  /** POSTs a join body as JSON. No credentials: the code is the credential. */
+  async function postJoin(
+    app: FastifyInstance,
+    body: unknown,
+    headers: Readonly<Record<string, string>> = JSON_HEADERS,
+  ): Promise<LightMyRequestResponse> {
+    return app.inject({
+      method: 'POST',
+      url: '/join',
+      headers: { ...headers },
+      payload: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+  }
+
+  it('spends a code and returns a token that can ingest immediately', async () => {
+    const { app, db } = freshApp();
+    const code = createJoinCodeStore(db).create('Rahim').code;
+
+    const response = await postJoin(app, {
+      code,
+      display_name: 'Rahim',
+      hostname: 'rahim-desktop',
+      os: 'linux',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<JoinResponseBody>();
+    expect(Object.keys(body).sort()).toEqual(['member_id', 'server_name', 'token']);
+    expect(body.token).toMatch(/^ccm_[A-Za-z0-9_-]{32}$/);
+
+    const ingested = await app.inject({
+      method: 'POST',
+      url: '/v1/logs',
+      headers: { ...JSON_HEADERS, authorization: `Bearer ${body.token}` },
+      payload: fixture('001.json'),
+    });
+    expect(ingested.statusCode).toBe(200);
+    const owner = db.prepare('SELECT member_id AS id FROM requests').get() as { id: string };
+    expect(owner.id).toBe(body.member_id);
+  });
+
+  it('accepts a code retyped in any spacing or case', async () => {
+    const { app, db } = freshApp();
+    const code = createJoinCodeStore(db).create('Rahim').code;
+
+    const response = await postJoin(app, {
+      code: code.replaceAll('-', ' ').toLowerCase(),
+      display_name: 'Rahim',
+    });
+
+    expect(response.statusCode).toBe(200);
+  });
+
+  it('answers 409 the second time the same code is presented', async () => {
+    const { app, db } = freshApp();
+    const code = createJoinCodeStore(db).create('Rahim').code;
+    expect((await postJoin(app, { code, display_name: 'Rahim' })).statusCode).toBe(200);
+
+    const second = await postJoin(app, { code, display_name: 'Mallory' });
+
+    expect(second.statusCode).toBe(409);
+    expect(second.json<ErrorBody>().error).toMatch(/already been used/);
+    expect(second.body).not.toContain('ccm_');
+  });
+
+  it('answers 410 for a code that has expired', async () => {
+    const { app, db } = freshApp();
+    const code = createJoinCodeStore(db).create('Rahim', {
+      now: Date.now() - JOIN_CODE_TTL_MS - 1000,
+    }).code;
+
+    const response = await postJoin(app, { code, display_name: 'Rahim' });
+
+    expect(response.statusCode).toBe(410);
+    expect(response.json<ErrorBody>().error).toMatch(/expired/);
+  });
+
+  it('answers 404 for a code nobody issued', async () => {
+    const { app } = freshApp();
+
+    const response = await postJoin(app, { code: 'ABCD-EFGH-JKMN', display_name: 'Rahim' });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it.each([
+    ['no code', { display_name: 'Rahim' }],
+    ['no display name', { code: 'ABCD-EFGH-JKMN' }],
+    ['a code that is not a string', { code: 42, display_name: 'Rahim' }],
+    ['an empty display name', { code: 'ABCD-EFGH-JKMN', display_name: '' }],
+    ['nothing at all', {}],
+  ])('answers 400 for a body with %s', async (_label, body) => {
+    const { app } = freshApp();
+
+    expect((await postJoin(app, body)).statusCode).toBe(400);
+  });
+
+  it('answers 400 rather than 500 for a body that is not JSON', async () => {
+    const { app } = freshApp();
+
+    // The ingest route reads raw bytes; this one must still get Fastify's own
+    // JSON parsing, which is only true because that parser swap is scoped.
+    const response = await postJoin(app, 'not json at all');
+
+    expect(response.statusCode).toBe(400);
+    expect(typeof response.json<ErrorBody>().error).toBe('string');
+  });
+
+  it('issues a different token to each joiner', async () => {
+    const { app, db } = freshApp();
+    const store = createJoinCodeStore(db);
+    const first = store.create('Rahim').code;
+    const second = store.create('Alice').code;
+
+    const one = await postJoin(app, { code: first, display_name: 'Rahim' });
+    const two = await postJoin(app, { code: second, display_name: 'Alice' });
+
+    expect(one.json<JoinResponseBody>().token).not.toBe(two.json<JoinResponseBody>().token);
+    expect(one.json<JoinResponseBody>().member_id).not.toBe(two.json<JoinResponseBody>().member_id);
+  });
+
+  it('never leaks a token in a rejection', async () => {
+    const { app, db } = freshApp();
+    const code = createJoinCodeStore(db).create('Rahim').code;
+    await postJoin(app, { code, display_name: 'Rahim' });
+
+    for (const body of [{ code, display_name: 'Mallory' }, { code: 'ABCD-EFGH-JKMN' }, {}]) {
+      const response = await postJoin(app, body);
+      expect(response.statusCode).toBeGreaterThanOrEqual(400);
+      expect(response.body).not.toContain('ccm_');
+      expect(response.body).not.toContain('cca_');
+    }
+  });
+});
+
+describe('the admin guard on /api', () => {
+  /** A GET with whatever credentials the test wants to try. */
+  async function get(
+    app: FastifyInstance,
+    url: string,
+    token?: string,
+  ): Promise<LightMyRequestResponse> {
+    return app.inject({
+      method: 'GET',
+      url,
+      headers: token === undefined ? {} : { authorization: `Bearer ${token}` },
+    });
+  }
+
+  it.each(['/api', '/api/summary', '/api/members/m_1/anything', '/api/not-a-route'])(
+    'answers 401 for %s without the admin token',
+    async (url) => {
+      const { app, db } = freshApp();
+      ensureAdminToken(db);
+
+      const response = await get(app, url);
+
+      expect(response.statusCode).toBe(401);
+      expect(response.headers['www-authenticate']).toBe('Bearer');
+    },
+  );
+
+  it('answers 404 once the token is right, which proves the guard ran first', async () => {
+    const { app, db } = freshApp();
+    const admin = ensureAdminToken(db).token ?? '';
+
+    const guarded = await get(app, '/api/not-a-route');
+    const authorised = await get(app, '/api/not-a-route', admin);
+
+    // Same path, two answers. An unauthenticated caller cannot tell which
+    // `/api` routes exist by comparing 401s against 404s.
+    expect(guarded.statusCode).toBe(401);
+    expect(authorised.statusCode).toBe(404);
+  });
+
+  it('refuses a member token, which is a credential for the other half', async () => {
+    const { app, db } = freshApp();
+    ensureAdminToken(db);
+
+    expect((await get(app, '/api/summary', MEMBER_TOKEN)).statusCode).toBe(401);
+    expect((await get(app, '/api/summary', generateAdminToken())).statusCode).toBe(401);
+  });
+
+  it('refuses everything on a server that has issued no admin token', async () => {
+    const { app } = freshApp();
+
+    expect((await get(app, '/api/summary', generateAdminToken())).statusCode).toBe(401);
+  });
+
+  it('leaves the routes that are not /api alone', async () => {
+    const { app, db } = freshApp();
+    ensureAdminToken(db);
+
+    // A path that merely starts with the same letters is not under the prefix.
+    expect((await get(app, '/health')).statusCode).toBe(200);
+    expect((await get(app, '/apiary')).statusCode).toBe(404);
+    expect((await postLogs(app, '{"resourceLogs":[]}')).statusCode).toBe(200);
+  });
+
+  it('is not fooled by a query string on the path', async () => {
+    const { app, db } = freshApp();
+    ensureAdminToken(db);
+
+    expect((await get(app, '/api/summary?from=2026-08-01')).statusCode).toBe(401);
   });
 });

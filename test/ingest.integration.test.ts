@@ -21,6 +21,7 @@ import type { FastifyInstance } from 'fastify';
 import type Database from 'better-sqlite3';
 
 import { buildApp } from '../src/server/app.js';
+import { generateMemberToken, hashToken } from '../src/server/auth.js';
 import { parseOtlpLogsPayload, isApiRequest } from '../src/server/otlp.js';
 import { migratedDatabase } from '../src/db/index.js';
 
@@ -85,15 +86,26 @@ function freshDatabase(): { db: Database.Database; path: string } {
   return { db, path };
 }
 
-/** An app over a fresh database, with logging off. */
+/**
+ * The ingest token every request in this file carries, and the member it
+ * belongs to. Stage 2 made a token mandatory on the ingest route; what this
+ * file is about is the payload, so one member stands in for the whole team.
+ */
+const MEMBER_TOKEN = generateMemberToken();
+const MEMBER_ID = 'm_acceptance';
+
+/** An app over a fresh database, with logging off and one member enrolled. */
 function freshApp(): { app: FastifyInstance; db: Database.Database; path: string } {
   const { db, path } = freshDatabase();
+  db.prepare(
+    'INSERT INTO members (id, display_name, token_hash, created_at) VALUES (?, ?, ?, ?)',
+  ).run(MEMBER_ID, 'Acceptance', hashToken(MEMBER_TOKEN), 1_700_000_000_000);
   const app = buildApp({ db });
   openApps.push(app);
   return { app, db, path };
 }
 
-/** POSTs a raw body to the ingest route. */
+/** POSTs a raw, authenticated body to the ingest route. */
 async function post(
   app: FastifyInstance,
   payload: string | Buffer,
@@ -102,7 +114,11 @@ async function post(
   return app.inject({
     method: 'POST',
     url: '/v1/logs',
-    headers: { 'content-type': 'application/json', ...headers },
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${MEMBER_TOKEN}`,
+      ...headers,
+    },
     payload,
   });
 }

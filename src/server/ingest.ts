@@ -13,14 +13,19 @@ import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import type { FastifyBaseLogger } from 'fastify';
 
-import { KNOWN_EVENT_NAMES, UNATTRIBUTED_MEMBER_ID } from '../shared/constants.js';
+import { KNOWN_EVENT_NAMES } from '../shared/constants.js';
 import type { ApiRequestEvent, ClaudeCodeEvent, IngestResult } from '../shared/types.js';
 import { isApiRequest } from './otlp.js';
 
-/** Knobs the HTTP layer sets per request; every one has a safe default. */
+/** Knobs the HTTP layer sets per request. */
 export interface IngestOptions {
-  /** Owner of the rows written. Defaults to the placeholder member. */
-  readonly memberId?: string;
+  /**
+   * Owner of the rows written — the member the bearer token resolved to.
+   * Required rather than defaulted: a batch stored against the wrong member is
+   * invisible on the dashboard until someone queries the numbers by hand, so
+   * forgetting to pass it should not compile.
+   */
+  readonly memberId: string;
   /** Clock for rows whose event carried no usable timestamp. Defaults to `Date.now()`. */
   readonly now?: number;
   /** Only the two levels ingest uses; a plain object satisfies it in tests. */
@@ -47,9 +52,11 @@ INSERT OR IGNORE INTO requests (
  * know. `min`/`max` widen the seen-window in whichever direction the batch
  * pushes, so out-of-order delivery is harmless.
  *
- * `member_id` is deliberately absent from the update list.
- * TODO(stage 2): claiming an install reassigns it; until then an unauthenticated
- * batch must not be able to reset an install back to the placeholder member.
+ * `member_id` is the one field that is overwritten rather than coalesced. The
+ * batch carrying it is authenticated, so the member sending events for an
+ * install is by definition its current owner — which is what lets someone who
+ * rejoins with a new token keep the machine they have always been reporting
+ * from, instead of stranding it under the identity they replaced.
  */
 const UPSERT_INSTALL_SQL = `
 INSERT INTO installs (
@@ -57,6 +64,7 @@ INSERT INTO installs (
   first_seen, last_seen
 ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
+  member_id     = excluded.member_id,
   hostname      = COALESCE(excluded.hostname, installs.hostname),
   os_type       = COALESCE(excluded.os_type, installs.os_type),
   os_version    = COALESCE(excluded.os_version, installs.os_version),
@@ -111,10 +119,9 @@ export function requestRowId(event: ApiRequestEvent): string | undefined {
 export function ingestEvents(
   db: Database.Database,
   events: readonly ClaudeCodeEvent[],
-  options: IngestOptions = {},
+  options: IngestOptions,
 ): IngestResult {
-  // TODO(stage 2): member comes from the bearer token, not the default.
-  const memberId = options.memberId ?? UNATTRIBUTED_MEMBER_ID;
+  const memberId = options.memberId;
   const now = options.now ?? Date.now();
   const logger = options.logger;
 

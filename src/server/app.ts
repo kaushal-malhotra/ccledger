@@ -1,23 +1,34 @@
 /**
- * The HTTP surface: OTLP ingest, a health probe, and the status-code mapping
- * that keeps the two apart.
+ * The HTTP surface: OTLP ingest, enrolment, a health probe, and the status-code
+ * mapping that keeps them apart.
  *
- * The single rule this file exists to enforce is that a body which will never
- * parse gets a 4xx. OTLP exporters retry on 5xx and drop on 4xx, so one 500 on
- * a permanently malformed payload turns a misconfigured client into an
- * unbounded retry loop against this server. Every decode step below therefore
- * happens inside the handler, where the status code is ours to choose, rather
- * than in a Fastify content-type parser, where a throw becomes a 500.
+ * Two rules shape this file. The first is that a body which will never parse
+ * gets a 4xx: OTLP exporters retry on 5xx and drop on 4xx, so one 500 on a
+ * permanently malformed payload turns a misconfigured client into an unbounded
+ * retry loop against this server. Every decode step therefore happens inside the
+ * handler, where the status code is ours to choose, rather than in a content
+ * type parser, where a throw becomes a 500.
+ *
+ * The second is that ingest reads raw bytes and nothing else does. The raw
+ * parser lives inside its own plugin scope so `/join` and everything under
+ * `/api` keep Fastify's ordinary JSON parsing and schema validation, rather than
+ * every route having to re-implement the decoding the ingest path needs.
  */
 
 import { brotliDecompressSync, gunzipSync, inflateSync } from 'node:zlib';
 
 import type Database from 'better-sqlite3';
 import Fastify from 'fastify';
-import type { FastifyInstance, FastifyReply, FastifyServerOptions } from 'fastify';
+import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 
+import { requireAdmin, requireMember } from './auth.js';
 import { ingestEvents } from './ingest.js';
+import { joinWithCode } from './join.js';
 import { parseOtlpLogsPayload } from './otlp.js';
+import { JSON_CONTENT_TYPE, fail } from './reply.js';
+import { createJoinCodeStore } from '../db/joincodes.js';
+import { ADMIN_API_PREFIX } from '../shared/constants.js';
+import type { JoinRequestBody } from '../shared/types.js';
 import { VERSION } from '../shared/version.js';
 
 /** Claude Code batches are kilobytes; 8 MiB is headroom for a backlog flush. */
@@ -33,14 +44,23 @@ const MAX_INFLATION_FACTOR = 16;
 /** Sent verbatim so the success body is byte-exact, whatever a serializer would do. */
 const EXPORT_SUCCESS_BODY = '{"partialSuccess":{}}';
 
-/** Set explicitly because `reply.send(string)` otherwise defaults to text/plain. */
-const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
-
 /** OTLP also defines a protobuf encoding; ccledger implements only the JSON one. */
 const PROTOBUF_MEDIA_TYPES: ReadonlySet<string> = new Set([
   'application/x-protobuf',
   'application/protobuf',
 ]);
+
+/** Body schema for `POST /join`. Lengths are bounds, not validation of meaning. */
+const JOIN_BODY_SCHEMA = {
+  type: 'object',
+  required: ['code', 'display_name'],
+  properties: {
+    code: { type: 'string', minLength: 1, maxLength: 64 },
+    display_name: { type: 'string', minLength: 1, maxLength: 128 },
+    hostname: { type: 'string', maxLength: 255 },
+    os: { type: 'string', maxLength: 64 },
+  },
+} as const;
 
 /** A plain JSON object. Arrays and `null` are not records — same rule as otlp.ts. */
 function isRecordObject(value: unknown): value is Record<string, unknown> {
@@ -112,16 +132,12 @@ function decodeBody(raw: Buffer, header: string | undefined, bodyLimit: number):
   }
 }
 
-/** The one shape every rejection uses. Never carries any part of the request. */
-function fail(reply: FastifyReply, statusCode: number, error: string): void {
-  reply.code(statusCode).type(JSON_CONTENT_TYPE).send({ error });
-}
-
 /**
  * Builds the ccledger HTTP app. Nothing is listened on and no migration is run;
  * the caller owns both.
  */
 export function buildApp(options: AppOptions): FastifyInstance {
+  const db = options.db;
   const bodyLimit = options.bodyLimit ?? DEFAULT_BODY_LIMIT;
   const serverOptions: FastifyServerOptions = {
     bodyLimit,
@@ -129,24 +145,12 @@ export function buildApp(options: AppOptions): FastifyInstance {
   };
   const app: FastifyInstance = Fastify(serverOptions);
   const startedAtMs = Date.now();
+  // One store per app, because the cache inside it is this process's memory.
+  const joinCodes = createJoinCodeStore(db);
 
-  // The default JSON parser throws a 400 of its own making and hands us an
-  // already-parsed object, which leaves no place to handle Content-Encoding.
-  // Clearing the table and re-registering as `parseAs: 'buffer'` means the
-  // handler receives exactly the bytes that arrived.
-  app.removeAllContentTypeParsers();
-  const keepRawBuffer = (
-    _request: unknown,
-    body: Buffer,
-    done: (error: Error | null, body?: Buffer) => void,
-  ): void => {
-    done(null, body);
-  };
-  app.addContentTypeParser('application/json', { parseAs: 'buffer' }, keepRawBuffer);
-  // The catch-all exists so a missing or unusual Content-Type reaches the
-  // handler and is judged on its bytes, rather than being refused with a 415
-  // that an exporter cannot act on.
-  app.addContentTypeParser('*', { parseAs: 'buffer' }, keepRawBuffer);
+  // `null` rather than a shape: Fastify v5 refuses a reference type as a request
+  // decorator default, and every route has to see the same starting value.
+  app.decorateRequest('member', null);
 
   // `unknown` rather than `FastifyError`: anything reachable by `throw` lands
   // here, and a thrown non-Error must not crash the handler that exists to keep
@@ -156,8 +160,9 @@ export function buildApp(options: AppOptions): FastifyInstance {
       isRecordObject(error) && typeof error.statusCode === 'number' ? error.statusCode : 500;
     if (statusCode >= 400 && statusCode < 500) {
       // Fastify raises these itself — oversize body, unparseable media type,
-      // truncated stream. They are already the right answer, and a client
-      // error is not an incident, so it must not be logged at error level.
+      // truncated stream, a body that failed its schema. They are already the
+      // right answer, and a client error is not an incident, so it must not be
+      // logged at error level.
       request.log.warn({ err: error, statusCode }, 'rejected request');
       fail(reply, statusCode, error instanceof Error ? error.message : 'bad request');
       return;
@@ -165,6 +170,17 @@ export function buildApp(options: AppOptions): FastifyInstance {
     // Anything else is ours: a SQLite failure, a bug. The exporter should retry.
     request.log.error({ err: error }, 'unhandled error serving request');
     fail(reply, 500, 'internal server error');
+  });
+
+  // Before any route, so that the guard covers paths no route has claimed too.
+  // An `/api` request without the admin token gets 401 whether or not the route
+  // exists, which is both the right answer and one that tells a prober nothing.
+  const admin = requireAdmin(db);
+  app.addHook('onRequest', async (request, reply) => {
+    const path = request.url.split('?')[0] ?? '';
+    if (path === ADMIN_API_PREFIX || path.startsWith(`${ADMIN_API_PREFIX}/`)) {
+      await admin(request, reply);
+    }
   });
 
   app.get('/health', (_request, reply) => {
@@ -175,64 +191,123 @@ export function buildApp(options: AppOptions): FastifyInstance {
     });
   });
 
-  // TODO(stage 2): bearer-token auth guards this route; for now every request is accepted.
-  app.post(
-    '/v1/logs',
-    {
-      onRequest: async (request, reply) => {
-        if (PROTOBUF_MEDIA_TYPES.has(mediaType(request.headers['content-type']))) {
-          // Refused before the body is read: buffering megabytes we have no
-          // decoder for is work an unauthenticated caller should not be able
-          // to ask for. 415 is terminal for an exporter, unlike a 5xx.
-          return fail(reply, 415, 'only OTLP/HTTP with JSON encoding is accepted');
-        }
-      },
-    },
+  // Unauthenticated by design: the join code is the credential, and a teammate
+  // has nothing else yet. Everything that makes that safe — single use, 24 hour
+  // expiry, 60 bits of code — is enforced in `joinWithCode`.
+  app.post<{ Body: JoinRequestBody }>(
+    '/join',
+    { schema: { body: JOIN_BODY_SCHEMA } },
     (request, reply) => {
-      const body: unknown = request.body;
-      if (!Buffer.isBuffer(body) || body.length === 0) {
-        fail(reply, 400, 'request body is empty');
+      const result = joinWithCode(db, joinCodes, request.body);
+      if (!result.ok) {
+        request.log.warn({ status: result.status }, 'join refused');
+        fail(reply, result.status, result.error);
         return;
       }
-
-      const decoded = decodeBody(body, request.headers['content-encoding'], bodyLimit);
-      if (!decoded.ok) {
-        fail(reply, 400, decoded.error);
-        return;
-      }
-
-      let payload: unknown;
-      try {
-        payload = JSON.parse(decoded.body.toString('utf8'));
-      } catch {
-        // Deliberately not the parser's own message: it quotes the offending
-        // bytes, which would reflect the caller's payload back to them.
-        fail(reply, 400, 'request body is not valid JSON');
-        return;
-      }
-
-      const parsed = parseOtlpLogsPayload(payload);
-      if (!parsed.ok) {
-        fail(reply, 400, parsed.error ?? 'body is not an OTLP logs payload');
-        return;
-      }
-
-      // Only a genuine storage failure can throw from here, and that is the one
-      // case where a 500 is the honest answer and a retry is the right response.
-      const result = ingestEvents(options.db, parsed.events, { logger: request.log });
-
-      if (parsed.issues.length > 0) {
-        // Issue reasons name paths and attribute keys, never attribute values.
-        request.log.debug(
-          { issues: parsed.issues.slice(0, 20) },
-          'OTLP payload had unusable parts',
-        );
-      }
-      request.log.debug({ counts: parsed.counts, result }, 'ingested OTLP batch');
-
-      reply.code(200).type(JSON_CONTENT_TYPE).send(EXPORT_SUCCESS_BODY);
+      request.log.info({ memberId: result.member.id }, 'member joined');
+      reply.code(200).type(JSON_CONTENT_TYPE).send(result.body);
     },
   );
+
+  // The ingest route and nothing else reads raw bytes. Its own plugin scope, so
+  // replacing the content type parsers here cannot reach `/join` or `/api`.
+  void app.register(async (ingest) => {
+    // The default JSON parser throws a 400 of its own making and hands us an
+    // already-parsed object, which leaves no place to handle Content-Encoding.
+    // Clearing the table and re-registering as `parseAs: 'buffer'` means the
+    // handler receives exactly the bytes that arrived.
+    ingest.removeAllContentTypeParsers();
+    const keepRawBuffer = (
+      _request: unknown,
+      body: Buffer,
+      done: (error: Error | null, body?: Buffer) => void,
+    ): void => {
+      done(null, body);
+    };
+    ingest.addContentTypeParser('application/json', { parseAs: 'buffer' }, keepRawBuffer);
+    // The catch-all exists so a missing or unusual Content-Type reaches the
+    // handler and is judged on its bytes, rather than being refused with a 415
+    // that an exporter cannot act on.
+    ingest.addContentTypeParser('*', { parseAs: 'buffer' }, keepRawBuffer);
+
+    ingest.post(
+      '/v1/logs',
+      {
+        // `onRequest`, not `preHandler`: both of these run before Fastify reads
+        // the body, so an unauthenticated caller cannot make this process
+        // buffer eight megabytes, and a body encoded in a format there is no
+        // decoder for is refused before it is spooled.
+        onRequest: [
+          requireMember(db),
+          async (request, reply) => {
+            if (PROTOBUF_MEDIA_TYPES.has(mediaType(request.headers['content-type']))) {
+              // 415 is terminal for an exporter, unlike a 5xx: it stops rather
+              // than retrying a payload this server will never understand.
+              return fail(reply, 415, 'only OTLP/HTTP with JSON encoding is accepted');
+            }
+          },
+        ],
+      },
+      (request, reply) => {
+        const member = request.member;
+        if (member === null) {
+          // Unreachable: `requireMember` answers before the handler runs. Kept
+          // so attribution is a checked fact rather than a non-null assertion.
+          fail(reply, 401, 'unauthenticated');
+          return;
+        }
+
+        const body: unknown = request.body;
+        if (!Buffer.isBuffer(body) || body.length === 0) {
+          fail(reply, 400, 'request body is empty');
+          return;
+        }
+
+        const decoded = decodeBody(body, request.headers['content-encoding'], bodyLimit);
+        if (!decoded.ok) {
+          fail(reply, 400, decoded.error);
+          return;
+        }
+
+        let payload: unknown;
+        try {
+          payload = JSON.parse(decoded.body.toString('utf8'));
+        } catch {
+          // Deliberately not the parser's own message: it quotes the offending
+          // bytes, which would reflect the caller's payload back to them.
+          fail(reply, 400, 'request body is not valid JSON');
+          return;
+        }
+
+        const parsed = parseOtlpLogsPayload(payload);
+        if (!parsed.ok) {
+          fail(reply, 400, parsed.error ?? 'body is not an OTLP logs payload');
+          return;
+        }
+
+        // Only a genuine storage failure can throw from here, and that is the one
+        // case where a 500 is the honest answer and a retry is the right response.
+        const result = ingestEvents(db, parsed.events, {
+          memberId: member.id,
+          logger: request.log,
+        });
+
+        if (parsed.issues.length > 0) {
+          // Issue reasons name paths and attribute keys, never attribute values.
+          request.log.debug(
+            { issues: parsed.issues.slice(0, 20) },
+            'OTLP payload had unusable parts',
+          );
+        }
+        request.log.debug(
+          { counts: parsed.counts, result, memberId: member.id },
+          'ingested OTLP batch',
+        );
+
+        reply.code(200).type(JSON_CONTENT_TYPE).send(EXPORT_SUCCESS_BODY);
+      },
+    );
+  });
 
   return app;
 }

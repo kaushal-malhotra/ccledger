@@ -26,6 +26,13 @@ interface InstallRow {
   readonly last_seen: number;
 }
 
+/**
+ * Owner of every row these tests write. Ingest takes the member the bearer
+ * token resolved to; which member that is changes nothing below, so the
+ * placeholder the migrations seed stands in for one.
+ */
+const OWNER = { memberId: UNATTRIBUTED_MEMBER_ID } as const;
+
 /** Handles to close after each test; `:memory:` still leaks a native handle. */
 const openHandles: Database.Database[] = [];
 
@@ -212,8 +219,8 @@ describe('ingestEvents on the real captures', () => {
   it('writes exactly one row per api_request, every column as captured', () => {
     const db = freshDb();
 
-    const first = ingestEvents(db, fixtureEvents('001.json'));
-    const second = ingestEvents(db, fixtureEvents('002.json'));
+    const first = ingestEvents(db, fixtureEvents('001.json'), OWNER);
+    const second = ingestEvents(db, fixtureEvents('002.json'), OWNER);
 
     expect(first.received).toBe(6);
     expect(first.apiRequests).toBe(1);
@@ -229,7 +236,7 @@ describe('ingestEvents on the real captures', () => {
 
   it('takes cost_micros from the integer, not from the cost_usd float', () => {
     const db = freshDb();
-    ingestEvents(db, fixtureEvents('002.json'));
+    ingestEvents(db, fixtureEvents('002.json'), OWNER);
 
     // 0.099585 * 1e6 is 99584.99999999999 in binary floating point, so a row
     // reading 99585 could only have come from `cost_usd_micros`.
@@ -238,8 +245,8 @@ describe('ingestEvents on the real captures', () => {
 
   it('stores neither PII nor content anywhere in a row', () => {
     const db = freshDb();
-    ingestEvents(db, fixtureEvents('001.json'));
-    ingestEvents(db, fixtureEvents('002.json'));
+    ingestEvents(db, fixtureEvents('001.json'), OWNER);
+    ingestEvents(db, fixtureEvents('002.json'), OWNER);
 
     const sentinels = [
       'teammate@example.invalid',
@@ -258,12 +265,12 @@ describe('ingestEvents on the real captures', () => {
 describe('idempotency', () => {
   it('reports the whole second delivery as duplicates and writes nothing', () => {
     const db = freshDb();
-    ingestEvents(db, fixtureEvents('001.json'));
-    ingestEvents(db, fixtureEvents('002.json'));
+    ingestEvents(db, fixtureEvents('001.json'), OWNER);
+    ingestEvents(db, fixtureEvents('002.json'), OWNER);
     const afterFirstPass = requestRows(db);
 
-    const replay001 = ingestEvents(db, fixtureEvents('001.json'));
-    const replay002 = ingestEvents(db, fixtureEvents('002.json'));
+    const replay001 = ingestEvents(db, fixtureEvents('001.json'), OWNER);
+    const replay002 = ingestEvents(db, fixtureEvents('002.json'), OWNER);
 
     expect(replay001.inserted).toBe(0);
     expect(replay001.duplicates).toBe(1);
@@ -280,7 +287,7 @@ describe('idempotency', () => {
     const db = freshDb();
     const events = [...fixtureEvents('001.json'), ...fixtureEvents('001.json')];
 
-    const result = ingestEvents(db, events);
+    const result = ingestEvents(db, events, OWNER);
 
     expect(result.received).toBe(12);
     expect(result.apiRequests).toBe(2);
@@ -329,7 +336,7 @@ describe('requestRowId', () => {
     const db = freshDb();
     const records = [apiRequestRecord([attr('session.id', str(FIXTURE_SESSION_ID))])];
 
-    const first = ingestEvents(db, syntheticEvents(records));
+    const first = ingestEvents(db, syntheticEvents(records), OWNER);
     const event = onlyApiRequest(syntheticEvents(records));
     const expected = createHash('sha256')
       .update(`${FIXTURE_SESSION_ID}|1787503991194|11|22`, 'utf8')
@@ -342,7 +349,7 @@ describe('requestRowId', () => {
     expect(expected).toMatch(/^[0-9a-f]{64}$/);
 
     // Redelivery of the identical record must hash to the identical key.
-    const replay = ingestEvents(db, syntheticEvents(records));
+    const replay = ingestEvents(db, syntheticEvents(records), OWNER);
     expect(replay.inserted).toBe(0);
     expect(replay.duplicates).toBe(1);
     expect(requestRows(db)).toHaveLength(1);
@@ -365,6 +372,7 @@ describe('requestRowId', () => {
           ...base,
         ]),
       ]),
+      OWNER,
     );
 
     expect(result.inserted).toBe(2);
@@ -379,7 +387,7 @@ describe('requestRowId', () => {
 
     expect(requestRowId(onlyApiRequest(events))).toBeUndefined();
 
-    const result = ingestEvents(db, events);
+    const result = ingestEvents(db, events, OWNER);
 
     expect(result.apiRequests).toBe(1);
     expect(result.skipped).toBe(1);
@@ -403,8 +411,8 @@ describe('installs upsert', () => {
   it('creates one row for the capture install, hostname null and member the placeholder', () => {
     const db = freshDb();
 
-    const first = ingestEvents(db, fixtureEvents('001.json'));
-    const second = ingestEvents(db, fixtureEvents('002.json'));
+    const first = ingestEvents(db, fixtureEvents('001.json'), OWNER);
+    const second = ingestEvents(db, fixtureEvents('002.json'), OWNER);
 
     // Every record in both captures carries the same user.id, so one install.
     expect(first.installsTouched).toBe(1);
@@ -429,15 +437,15 @@ describe('installs upsert', () => {
 
   it('widens last_seen forward and first_seen backward, never the other way', () => {
     const db = freshDb();
-    ingestEvents(db, fixtureEvents('001.json'));
-    ingestEvents(db, fixtureEvents('002.json'));
+    ingestEvents(db, fixtureEvents('001.json'), OWNER);
+    ingestEvents(db, fixtureEvents('002.json'), OWNER);
 
-    ingestEvents(db, syntheticEvents([pingRecord('2026-08-24T09:00:00.000Z')]));
+    ingestEvents(db, syntheticEvents([pingRecord('2026-08-24T09:00:00.000Z')]), OWNER);
     const afterNewer = must(installRows(db)[0], 'the install row');
     expect(afterNewer.first_seen).toBe(FIRST_FIXTURE_TS);
     expect(afterNewer.last_seen).toBe(Date.parse('2026-08-24T09:00:00.000Z'));
 
-    ingestEvents(db, syntheticEvents([pingRecord('2026-08-22T09:00:00.000Z')]));
+    ingestEvents(db, syntheticEvents([pingRecord('2026-08-22T09:00:00.000Z')]), OWNER);
     const afterOlder = must(installRows(db)[0], 'the install row');
     expect(afterOlder.first_seen).toBe(Date.parse('2026-08-22T09:00:00.000Z'));
     // The older batch must not have dragged last_seen back with it.
@@ -446,11 +454,11 @@ describe('installs upsert', () => {
 
   it('does not blank a known column when a later batch omits it', () => {
     const db = freshDb();
-    ingestEvents(db, fixtureEvents('001.json'));
+    ingestEvents(db, fixtureEvents('001.json'), OWNER);
 
     // No resource attributes and no terminal.type: everything descriptive is
     // absent, which must read as "no news", not as "now unknown".
-    ingestEvents(db, syntheticEvents([pingRecord('2026-08-24T09:00:00.000Z')], []));
+    ingestEvents(db, syntheticEvents([pingRecord('2026-08-24T09:00:00.000Z')], []), OWNER);
 
     const install = must(installRows(db)[0], 'the install row');
     expect(install.os_type).toBe('windows');
@@ -468,7 +476,7 @@ describe('installs upsert', () => {
       record([attr('event.name', str('plugin_loaded')), attr('user.id', str(FIXTURE_USER_ID))]),
     ]);
 
-    ingestEvents(db, events, { now: 1_700_000_000_000 });
+    ingestEvents(db, events, { ...OWNER, now: 1_700_000_000_000 });
 
     const install = must(installRows(db)[0], 'the install row');
     expect(install.first_seen).toBe(1_700_000_000_000);
@@ -481,10 +489,32 @@ describe('installs upsert', () => {
     const result = ingestEvents(
       db,
       syntheticEvents([record([attr('event.name', str('tool_result'))])]),
+      OWNER,
     );
 
     expect(result.installsTouched).toBe(0);
     expect(installRows(db)).toHaveLength(0);
+  });
+
+  it('reassigns an install to whoever is reporting from it now', () => {
+    const db = freshDb();
+    db.prepare(
+      'INSERT INTO members (id, display_name, token_hash, created_at) VALUES (?, ?, ?, ?)',
+    ).run('m_rahim', 'Rahim', 'sha256:rahim', 1_700_000_000_000);
+    const events = syntheticEvents([pingRecord('2026-08-23T09:00:00.000Z')]);
+
+    ingestEvents(db, events, OWNER);
+    // The same machine, a new token: someone who rejoined after their old one
+    // was revoked. `user.id` comes from ~/.claude.json and does not change, so
+    // the install has to follow the token rather than stranding under the
+    // identity it replaced.
+    ingestEvents(db, events, { memberId: 'm_rahim' });
+
+    const install = must(installRows(db)[0], 'the install row');
+    expect(installRows(db)).toHaveLength(1);
+    expect(install.member_id).toBe('m_rahim');
+    // Everything else still only ever widens.
+    expect(install.first_seen).toBe(Date.parse('2026-08-23T09:00:00.000Z'));
   });
 });
 
@@ -493,7 +523,7 @@ describe('event routing', () => {
     const db = freshDb();
     const events = fixtureEvents('001.json').filter((event) => !isApiRequest(event));
 
-    const result = ingestEvents(db, events);
+    const result = ingestEvents(db, events, OWNER);
 
     expect(events).toHaveLength(5);
     expect(result.received).toBe(5);
@@ -513,7 +543,7 @@ describe('event routing', () => {
       record([attr('event.name', str('user_prompt'))]),
     ]);
 
-    const result = ingestEvents(db, events, { logger });
+    const result = ingestEvents(db, events, { ...OWNER, logger });
 
     expect(result.unknownEvents).toEqual({ teleport_completed: 2, flux_capacitor_charged: 1 });
     expect(debug).toHaveLength(2);
@@ -529,7 +559,7 @@ describe('event routing', () => {
     const db = freshDb();
     const { logger, debug, warn } = recordingLogger();
 
-    const result = ingestEvents(db, fixtureEvents('001.json'), { logger });
+    const result = ingestEvents(db, fixtureEvents('001.json'), { ...OWNER, logger });
 
     expect(result.unknownEvents).toEqual({});
     expect(debug).toHaveLength(0);
@@ -550,7 +580,7 @@ describe('odd but well-formed events', () => {
     ]);
     expect(onlyApiRequest(events).ts).toBe(0);
 
-    const result = ingestEvents(db, events);
+    const result = ingestEvents(db, events, OWNER);
 
     expect(result.inserted).toBe(1);
     expect(requestRows(db)).toEqual([
@@ -591,6 +621,7 @@ describe('odd but well-formed events', () => {
           attr('duration_ms', int(-4)),
         ]),
       ]),
+      OWNER,
     );
 
     const row = must(requestRows(db)[0], 'the clamped row');
@@ -603,7 +634,7 @@ describe('odd but well-formed events', () => {
   it('writes nothing and reports zeroes for an empty batch', () => {
     const db = freshDb();
 
-    const result = ingestEvents(db, []);
+    const result = ingestEvents(db, [], OWNER);
 
     expect(result).toEqual({
       received: 0,
