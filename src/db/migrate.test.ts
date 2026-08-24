@@ -15,14 +15,19 @@ import {
   UNATTRIBUTED_TOKEN_HASH,
 } from '../shared/constants.js';
 
-/** Tables PRD section 8 defines, plus the runner's own bookkeeping table. */
+/**
+ * Tables PRD section 8 defines, plus the runner's own bookkeeping table and the
+ * two identity tables migration 3 adds.
+ */
 const EXPECTED_TABLES = [
   'alert_fires',
   'alert_rules',
   'installs',
+  'join_codes',
   'members',
   'requests',
   'schema_version',
+  'server_config',
 ];
 
 /** The three indexes PRD section 8 requires, as `[name, columns]`. */
@@ -209,6 +214,61 @@ describe('runMigrations', () => {
     // "window" is a SQLite keyword; an unquoted column would have failed exec.
     expect(names(db.prepare('SELECT name FROM pragma_table_info(?)').all('alert_rules'))).toContain(
       'window',
+    );
+  });
+});
+
+describe('migration 3, identity', () => {
+  it('adds the join_codes columns the single-use claim depends on', () => {
+    const db = open(':memory:');
+    runMigrations(db);
+
+    expect(names(db.prepare('SELECT name FROM pragma_table_info(?)').all('join_codes'))).toEqual([
+      'code',
+      'display_name',
+      'created_at',
+      'expires_at',
+      'used_at',
+      'member_id',
+    ]);
+  });
+
+  it('widens members rather than replacing it, keeping the seeded row', () => {
+    const db = open(':memory:');
+    runMigrations(db);
+
+    const columns = names(db.prepare('SELECT name FROM pragma_table_info(?)').all('members'));
+    expect(columns).toEqual([
+      'id',
+      'display_name',
+      'token_hash',
+      'created_at',
+      'revoked_at',
+      'join_hostname',
+      'join_os',
+    ]);
+    // Migration 2 seeded a row before migration 3 altered the table; an ALTER
+    // that dropped and recreated it would have taken that row with it.
+    expect(count(db.prepare('SELECT count(*) AS n FROM members').get())).toBe(1);
+  });
+
+  it('is safe to re-apply by hand against an already-migrated database', () => {
+    const db = open(':memory:');
+    runMigrations(db);
+
+    // What an operator recovering a half-stamped database would do. The
+    // ALTERs are guarded on pragma_table_info, so this must not throw.
+    const identity = MIGRATIONS.find((migration) => migration.name === 'identity');
+    expect(identity).toBeDefined();
+    expect(() => identity?.up(db)).not.toThrow();
+  });
+
+  it('stores server_config as a key/value table', () => {
+    const db = open(':memory:');
+    runMigrations(db);
+
+    expect(names(db.prepare('SELECT name FROM pragma_table_info(?)').all('server_config'))).toEqual(
+      ['key', 'value', 'updated_at'],
     );
   });
 });

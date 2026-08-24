@@ -8,7 +8,10 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** Asset pairs, as `[source, destination]` relative to this script. */
-const ASSETS = [['../src/db/schema.sql', '../dist/db/schema.sql']];
+const ASSETS = [
+  ['../src/db/schema.sql', '../dist/db/schema.sql'],
+  ['../src/db/schema-identity.sql', '../dist/db/schema-identity.sql'],
+];
 
 let failed = false;
 

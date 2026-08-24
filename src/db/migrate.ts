@@ -30,27 +30,46 @@ CREATE TABLE IF NOT EXISTS schema_version (
 `;
 
 /**
- * Locates `schema.sql` for both layouts: next to the compiled module in
+ * Locates a `.sql` asset for both layouts: next to the compiled module in
  * `dist/db/` after `npm run build`, and next to the source under vitest. No
  * `__dirname` — this package is ESM.
  */
-function readSchemaSql(): string {
-  const alongside = new URL('./schema.sql', import.meta.url);
+function readSqlAsset(filename: string): string {
+  const alongside = new URL(`./${filename}`, import.meta.url);
   if (existsSync(alongside)) {
     return readFileSync(alongside, 'utf8');
   }
 
   // A `dist/` build whose asset copy step did not run. Fall back to the source
   // tree rather than failing with an opaque ENOENT from inside a transaction.
-  const inSourceTree = new URL('../../src/db/schema.sql', import.meta.url);
+  const inSourceTree = new URL(`../../src/db/${filename}`, import.meta.url);
   if (existsSync(inSourceTree)) {
     return readFileSync(inSourceTree, 'utf8');
   }
 
   throw new Error(
-    `schema.sql not found at ${alongside.href} or ${inSourceTree.href}; ` +
+    `${filename} not found at ${alongside.href} or ${inSourceTree.href}; ` +
       'the build asset copy step did not run',
   );
+}
+
+/** True when `table` already has a column called `column`. */
+function hasColumn(db: Database.Database, table: string, column: string): boolean {
+  // `pragma_table_info` is a table-valued function, so the table name binds as
+  // a parameter instead of being interpolated into the SQL.
+  const rows = db.prepare('SELECT name FROM pragma_table_info(?)').all(table);
+  return rows.some((row) => (row as { name?: unknown }).name === column);
+}
+
+/**
+ * `ALTER TABLE ... ADD COLUMN`, skipped when the column is already there.
+ * SQLite has no `IF NOT EXISTS` for this, and the alternative — letting the
+ * duplicate-column error through — would be indistinguishable from a real
+ * failure inside the migration transaction.
+ */
+function addColumn(db: Database.Database, table: string, column: string, type: string): void {
+  if (hasColumn(db, table, column)) return;
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
 }
 
 /** Every migration, ascending. Append only — published versions are immutable. */
@@ -59,7 +78,7 @@ export const MIGRATIONS: readonly Migration[] = [
     version: 1,
     name: 'initial-schema',
     up: (db) => {
-      db.exec(readSchemaSql());
+      db.exec(readSqlAsset('schema.sql'));
     },
   },
   {
@@ -71,6 +90,18 @@ export const MIGRATIONS: readonly Migration[] = [
       db.prepare(
         'INSERT OR IGNORE INTO members (id, display_name, token_hash, created_at) VALUES (?, ?, ?, ?)',
       ).run(UNATTRIBUTED_MEMBER_ID, UNATTRIBUTED_MEMBER_NAME, UNATTRIBUTED_TOKEN_HASH, Date.now());
+    },
+  },
+  {
+    version: 3,
+    name: 'identity',
+    up: (db) => {
+      db.exec(readSqlAsset('schema-identity.sql'));
+      // What machine a token was first issued for. Two people called "Alex"
+      // are otherwise indistinguishable in the members list, and this is the
+      // only place the information is available — OTLP carries no hostname.
+      addColumn(db, 'members', 'join_hostname', 'TEXT');
+      addColumn(db, 'members', 'join_os', 'TEXT');
     },
   },
 ];
