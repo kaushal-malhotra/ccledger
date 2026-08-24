@@ -1,0 +1,7 @@
+{
+  // Emit config. Tests are colocated in `src/` so that they can import their
+  // subject by relative path, but they must not reach `dist/` or the published
+  // package; `tsconfig.json` still type-checks them via `npm run typecheck`.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "web", "test", "src/**/*.test.ts"]
+}

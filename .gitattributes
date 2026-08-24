@@ -1,0 +1,15 @@
+# Normalise text to LF in the repository *and* in the working tree.
+#
+# Development is on Windows, where core.autocrlf is usually true, but prettier
+# is configured endOfLine: "lf" and CI runs a Windows leg. Without eol=lf a
+# clean clone on Windows checks out CRLF and fails `prettier --check` before it
+# runs a single test.
+* text=auto eol=lf
+
+# Captured OTLP payloads are compared byte for byte in places; never touch them.
+test/fixtures/*.json -text
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.db binary
