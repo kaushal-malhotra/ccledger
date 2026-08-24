@@ -14,6 +14,47 @@ Each stage has a prompt to paste into Claude Code.
 
 ---
 
+## Before anything: version control
+
+The repo is initialised before stage 1 writes its first file, not at stage 7 when CI arrives. Eight stages of agent-written code with no history is eight stages you cannot diff, bisect, or roll back — and the review-and-fix pass at the end of each stage rewrites files, so without commits there is nothing to compare it against.
+
+```powershell
+git init -b main       # main, because the guide's branch protection assumes it
+```
+
+Two things to get right on day one, because both are painful to retrofit:
+
+**`.gitattributes` pinning `* text=auto eol=lf`.** Development is on Windows where `core.autocrlf` is usually true, Prettier is configured `endOfLine: "lf"`, and CI runs a Windows leg. Without it a clean clone on Windows checks out CRLF and fails `format:check` before it runs a single test.
+
+**`captures/` in `.gitignore`.** The stage 0 payloads carry the capturing account's real email, `organization.id`, and account identifiers. Sanitised copies belong in `test/fixtures/`, with the substituted values recorded in a README beside them. Those four attributes are exactly the ones the parser drops, so replacing them costs no test coverage, and distinctive sentinels are easier to grep a SQLite file for than a real address.
+
+**Commit when the stage's acceptance criteria pass, not before.** A commit of code that the next verification pass is about to rewrite is noise. Run the gate — `format:check`, `lint`, `typecheck`, `test`, `build` — then commit.
+
+**One commit per component, not one per stage.** Conventional commits with a scope, subject in the imperative, and a body that says *why* rather than restating the diff. Scopes track the layout: `db`, `server`, `cli`, `web`, `shared`, plus unscoped `chore`, `test`, `docs`, `ci`.
+
+| Stage | Commits it should produce |
+|---|---|
+| 1 | `chore:` skeleton · `feat(shared):` types · `test:` fixtures · `feat(db):` schema and migrations · `feat(server):` parser · `feat(server):` ingest · `feat(server):` app · `feat(cli):` serve · `test:` acceptance suite |
+| 2 | `feat(server):` auth and token hashing · `feat(server):` join codes · `feat(server):` admin token · `feat(cli):` serve flags · `feat(cli):` invite |
+| 3 | `feat(cli):` settings writer · `feat(cli):` setup · `feat(cli):` doctor · `feat(cli):` uninstall |
+| 4 | `feat(server):` read API · `feat(web):` shell and date range · `feat(web):` member table |
+| 5 | `feat(web):` timeseries chart · `feat(web):` model chart · `feat(web):` sparklines · `feat(web):` member detail |
+| 6 | `feat(db):` rules and fires · `feat(server):` evaluation · `feat(server):` webhook delivery · `feat(web):` rules UI |
+| 7 | `chore:` build and packaging · `feat(cli):` mDNS · `chore(docker):` image and compose · `feat(cli):` backup · `ci:` workflows |
+| 8 | `docs:` one commit per document · `chore:` LICENSE and templates |
+
+Append this line to every stage prompt you paste, stage 2 onward:
+
+```
+When the acceptance criteria pass and the gate is green, commit the work as
+separate conventional commits, one per component, following "Before anything:
+version control" in BUILD_STAGES.md. Do not commit before the gate is green.
+```
+
+A stage is not done until its acceptance criteria pass **and** its commits are on `main`.
+
+---
+
 ## Before anything: set up CLAUDE.md
 
 Claude Code reads `CLAUDE.md` at the repo root on every session. Put the project's context there once and every later prompt gets shorter and more accurate.
@@ -159,6 +200,10 @@ Set up the ccledger project skeleton and the ingest path.
    row shape, not just the parser).
 
 Auth comes in stage 2 — for now accept any request. Add a TODO.
+
+When the acceptance criteria pass and the gate is green, commit the work as
+separate conventional commits, one per component, following "Before anything:
+version control" in BUILD_STAGES.md. Do not commit before the gate is green.
 ```
 
 **Acceptance:** `curl` the fixture at `/v1/logs` twice, see exactly one row in SQLite, and see correct integer values.
@@ -203,6 +248,10 @@ Add identity to ccledger.
 
 Tests: token hashing round-trip, revoked member gets 403, join code is
 single-use, expired code rejected, ingest without a token is 401.
+
+When the acceptance criteria pass and the gate is green, commit the work as
+separate conventional commits, one per component, following "Before anything:
+version control" in BUILD_STAGES.md. Do not commit before the gate is green.
 ```
 
 **Acceptance:** `ccledger invite alice` gives a string; a manual `POST /join` with it returns a token; ingest with that token attributes rows to Alice; reusing the code fails.
@@ -273,6 +322,10 @@ must work identically on macOS, Linux, WSL, and Windows.
 Tests with a temp HOME: fresh install, merge into an existing settings file
 with unrelated keys, refuse on conflict, uninstall restores the original
 byte-for-byte, malformed settings file aborts safely.
+
+When the acceptance criteria pass and the gate is green, commit the work as
+separate conventional commits, one per component, following "Before anything:
+version control" in BUILD_STAGES.md. Do not commit before the gate is green.
 ```
 
 **Acceptance:** On a machine with an existing `~/.claude/settings.json` containing custom permissions and hooks, setup adds five keys and touches nothing else; uninstall returns the file to its original state.
@@ -318,6 +371,10 @@ served statically by Fastify.
 
 Design: clean and plain. Legible tabular numbers, generous spacing, no
 gradients, works at 1280px. Dark mode via prefers-color-scheme.
+
+When the acceptance criteria pass and the gate is green, commit the work as
+separate conventional commits, one per component, following "Before anything:
+version control" in BUILD_STAGES.md. Do not commit before the gate is green.
 ```
 
 **Acceptance:** With seeded data, the table shows correct per-member totals and shares that sum to 100%.
@@ -350,6 +407,10 @@ Requirements:
   - Accessible: every chart has a text summary for screen readers, and colour
     is never the only signal — the legend is always visible
   - Responsive down to 768px
+
+When the acceptance criteria pass and the gate is green, commit the work as
+separate conventional commits, one per component, following "Before anything:
+version control" in BUILD_STAGES.md. Do not commit before the gate is green.
 ```
 
 **Acceptance:** A range with three members renders a readable stacked area whose per-bucket totals match the table.
@@ -394,6 +455,10 @@ currently over threshold.
 Tests: threshold crossing fires exactly once, second crossing in the same
 window does not fire, new window allows a fire again, webhook failure does
 not break ingest.
+
+When the acceptance criteria pass and the gate is green, commit the work as
+separate conventional commits, one per component, following "Before anything:
+version control" in BUILD_STAGES.md. Do not commit before the gate is green.
 ```
 
 **Acceptance:** Seed usage past a 50% share threshold, confirm one webhook, confirm a second ingest in the same window sends nothing.
@@ -430,6 +495,10 @@ Make ccledger installable and deployable.
      GitHub Release with notes from the changelog
 
 6. Health and version endpoints, and a --version flag.
+
+When the acceptance criteria pass and the gate is green, commit the work as
+separate conventional commits, one per component, following "Before anything:
+version control" in BUILD_STAGES.md. Do not commit before the gate is green.
 ```
 
 **Acceptance:** `npm pack`, install the tarball globally in a clean container, run `serve`, and complete a full join-setup-ingest cycle against it.
@@ -470,6 +539,10 @@ Writing rules:
     with or endorsed by Anthropic
   - The README's first screenshot slot is the dashboard. Leave a placeholder
     with the exact filename to add.
+
+When the acceptance criteria pass and the gate is green, commit the work as
+separate conventional commits, one per component, following "Before anything:
+version control" in BUILD_STAGES.md. Do not commit before the gate is green.
 ```
 
 ---

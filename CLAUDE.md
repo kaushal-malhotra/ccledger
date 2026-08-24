@@ -65,4 +65,13 @@ side imports from the other directly.
 - Strict TypeScript. No `any` in committed code.
 - Every exported function has a JSDoc line.
 - Tests colocated as `*.test.ts` next to the code they cover.
-- Conventional commits (`feat:`, `fix:`, `chore:`, …).
+- Conventional commits (`feat:`, `fix:`, `chore:`, …), scoped to the layout —
+  `db`, `server`, `cli`, `web`, `shared`. One commit per component, not one per
+  build stage. The body says why, not what the diff already shows.
+- Commit only once the gate is green: `format:check`, `lint`, `typecheck`,
+  `test`, `build`. See "Before anything: version control" in `BUILD_STAGES.md`
+  for the per-stage commit breakdown.
+- `captures/` is gitignored. The raw OTLP payloads carry a real email and
+  account identifiers; only the sanitised `test/fixtures/` copies are committed.
+- LF line endings, pinned by `.gitattributes`. Prettier is `endOfLine: "lf"`
+  and CI runs a Windows leg, so a CRLF checkout fails the format gate.

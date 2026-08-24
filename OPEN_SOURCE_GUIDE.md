@@ -57,6 +57,8 @@ ccledger/
 ├── src/
 ├── web/
 ├── test/
+├── .gitattributes
+├── .gitignore
 ├── CHANGELOG.md
 ├── CLAUDE.md
 ├── CODE_OF_CONDUCT.md
@@ -65,6 +67,12 @@ ccledger/
 ├── README.md
 └── SECURITY.md
 ```
+
+The repository exists from stage 1, not from stage 7 when CI arrives — `BUILD_STAGES.md` has the commit conventions and the per-stage breakdown. Two files in that tree are easy to leave until too late:
+
+`.gitattributes` pins `* text=auto eol=lf`. You develop on Windows with `core.autocrlf` true, Prettier is `endOfLine: "lf"`, and the CI matrix below has a Windows leg — without it a clean clone fails the format check before it runs a test.
+
+`.gitignore` excludes `captures/`, the raw OTLP payloads from stage 0. They contain the capturing account's real email address, `organization.id`, and account identifiers. A project whose pitch is "we never collect your PII" cannot ship a fixture directory containing the author's. Commit sanitised copies under `test/fixtures/` and record the substitutions in a README beside them.
 
 ## 4. README structure
 
@@ -208,6 +216,8 @@ Answer every issue in the first month, even the bad ones. Early responsiveness i
 
 - [x] Name free on npm (`ccledger`)
 - [ ] Name checked on GitHub and against the `claude-code` topic tag
+- [x] Repo initialised on `main`, LF pinned by `.gitattributes`
+- [x] `captures/` gitignored; only sanitised fixtures committed
 - [ ] npm name reserved with a stub publish
 - [ ] LICENSE with your name, SPDX in package.json
 - [ ] Unaffiliated-with-Anthropic notice near the top of the README
