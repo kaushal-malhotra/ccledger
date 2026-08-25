@@ -14,6 +14,8 @@ import { Command, InvalidArgumentError } from 'commander';
 
 import type { ServerMode } from '../shared/types.js';
 import { VERSION } from '../shared/version.js';
+import type { DoctorOptions } from './doctor.js';
+import { runDoctor } from './doctor.js';
 import type { InviteOptions } from './invite.js';
 import { runInvite } from './invite.js';
 import { fail, messageOf } from './io.js';
@@ -92,8 +94,17 @@ export function buildProgram(): Command {
       await runSetup(setup.opts<SetupOptions>());
     });
 
-  // Stage 3's `doctor` and `uninstall` follow. They are absent rather than
-  // stubbed so `ccledger --help` never advertises a no-op.
+  const doctor = program
+    .command('doctor')
+    .description('find out why Claude Code is or is not reporting to ccledger');
+  doctor
+    .option('--json', 'print the report as JSON, for a bug report or a script')
+    .action(async () => {
+      await runDoctor(doctor.opts<DoctorOptions>());
+    });
+
+  // Stage 3's `uninstall` follows. It is absent rather than stubbed so
+  // `ccledger --help` never advertises a no-op.
   return program;
 }
 

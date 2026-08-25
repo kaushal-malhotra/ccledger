@@ -70,7 +70,7 @@ describe('buildProgram', () => {
       .commands.map((command) => command.name())
       .sort();
 
-    expect(names).toEqual(['invite', 'serve', 'setup']);
+    expect(names).toEqual(['doctor', 'invite', 'serve', 'setup']);
   });
 });
 
@@ -170,7 +170,7 @@ describe('invite options', () => {
   });
 });
 
-describe('setup options', () => {
+describe('client command options', () => {
   it('requires an invite for setup, because there is nothing to join without one', () => {
     expect(() => parseCommand('setup', ['setup'])).toThrow();
   });
@@ -188,6 +188,11 @@ describe('setup options', () => {
     expect(options['code']).toBe('abc123');
     expect(options['name']).toBe('Alice');
     expect(options['yes']).toBe(true);
+  });
+
+  it('defaults doctor to human output', () => {
+    expect(parseCommand('doctor', ['doctor'])['json']).toBeUndefined();
+    expect(parseCommand('doctor', ['doctor', '--json'])['json']).toBe(true);
   });
 });
 
