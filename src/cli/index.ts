@@ -19,6 +19,8 @@ import { runInvite } from './invite.js';
 import { fail, messageOf } from './io.js';
 import type { ServeOptions } from './serve.js';
 import { DEFAULT_DB_PATH, DEFAULT_HOST, DEFAULT_MODE, DEFAULT_PORT, runServe } from './serve.js';
+import type { SetupOptions } from './setup.js';
+import { runSetup } from './setup.js';
 
 /** Deployment shapes `--mode` accepts. */
 const MODES: readonly ServerMode[] = ['laptop', 'vps'];
@@ -79,7 +81,18 @@ export function buildProgram(): Command {
       runInvite(displayName, invite.opts<InviteOptions>());
     });
 
-  // Stage 3 adds `setup`, `doctor` and `uninstall`. They are absent rather than
+  const setup = program
+    .command('setup')
+    .description('join a ccledger server and configure Claude Code to report to it');
+  setup
+    .requiredOption('--code <invite>', 'the invite string your admin sent you')
+    .option('--name <display-name>', 'name to show on the dashboard; defaults to the invite')
+    .option('-y, --yes', 'accept the disclosure without being asked, for scripted installs')
+    .action(async () => {
+      await runSetup(setup.opts<SetupOptions>());
+    });
+
+  // Stage 3's `doctor` and `uninstall` follow. They are absent rather than
   // stubbed so `ccledger --help` never advertises a no-op.
   return program;
 }

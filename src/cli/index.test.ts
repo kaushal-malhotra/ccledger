@@ -65,16 +65,12 @@ describe('buildProgram', () => {
     expect(VERSION).not.toBe('0.0.0');
   });
 
-  it('exposes serve and invite, and does not stub the stage 3 commands', () => {
+  it('exposes the whole command surface and nothing else', () => {
     const names = buildProgram()
       .commands.map((command) => command.name())
       .sort();
 
-    expect(names).toContain('serve');
-    expect(names).toContain('invite');
-    for (const later of ['setup', 'doctor', 'uninstall']) {
-      expect(names).not.toContain(later);
-    }
+    expect(names).toEqual(['invite', 'serve', 'setup']);
   });
 });
 
@@ -171,6 +167,27 @@ describe('invite options', () => {
 
   it('requires a display name', () => {
     expect(() => parseCommand('invite', ['invite'])).toThrow();
+  });
+});
+
+describe('setup options', () => {
+  it('requires an invite for setup, because there is nothing to join without one', () => {
+    expect(() => parseCommand('setup', ['setup'])).toThrow();
+  });
+
+  it('takes the invite, a name and the non-interactive flag', () => {
+    const options = parseCommand('setup', [
+      'setup',
+      '--code',
+      'abc123',
+      '--name',
+      'Alice',
+      '--yes',
+    ]);
+
+    expect(options['code']).toBe('abc123');
+    expect(options['name']).toBe('Alice');
+    expect(options['yes']).toBe(true);
   });
 });
 
