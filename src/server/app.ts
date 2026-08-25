@@ -21,6 +21,7 @@ import type Database from 'better-sqlite3';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 
+import { registerApiRoutes } from './api.js';
 import { requireAdmin, requireMember, revokeMember } from './auth.js';
 import { ingestEvents } from './ingest.js';
 import { joinWithCode } from './join.js';
@@ -182,6 +183,10 @@ export function buildApp(options: AppOptions): FastifyInstance {
       await admin(request, reply);
     }
   });
+
+  // Registered after the guard above and in the same scope as it, so every
+  // route in there is behind the admin token without saying so route by route.
+  registerApiRoutes(app, db);
 
   app.get(HEALTH_PATH, (_request, reply) => {
     reply.code(200).send({
