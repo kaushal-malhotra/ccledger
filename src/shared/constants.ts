@@ -139,6 +139,31 @@ export const OTLP_LOGS_PATH = '/v1/logs';
 /** Unauthenticated liveness probe. `doctor` asks this before blaming the token. */
 export const HEALTH_PATH = '/health';
 
+/**
+ * `query_source` values for calls Claude Code makes on its own behalf rather
+ * than because someone asked for something: naming a session, compacting a
+ * transcript. They are real tokens and real cost, so they are stored and
+ * counted like everything else — but an admin comparing two teammates wants to
+ * know how much of a total is work and how much is housekeeping.
+ *
+ * The list is what stage 0 observed plus the compaction source. It is a
+ * denylist rather than an allowlist on purpose: a `query_source` this build has
+ * never heard of counts as work, so a new one appearing in a future Claude Code
+ * shows up in the numbers instead of quietly vanishing from them.
+ */
+export const OVERHEAD_QUERY_SOURCES: readonly string[] = ['generate_session_title', 'compact'];
+
+/**
+ * The `source` value that selects requests carrying no `query_source` at all.
+ * A literal is needed because an empty query parameter cannot be told apart
+ * from an absent one, and `NULL` is a real category here rather than an
+ * oversight — the early Claude Code records simply do not carry the attribute.
+ */
+export const SOURCE_NONE = 'none';
+
+/** Sessions returned by `GET /api/members/:id`. The response says when it capped. */
+export const MEMBER_SESSIONS_LIMIT = 200;
+
 /** Where a join code is spent for a token. */
 export const JOIN_PATH = '/join';
 
