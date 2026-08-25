@@ -23,6 +23,7 @@ import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 
 import { registerApiRoutes } from './api.js';
 import { requireAdmin, requireMember, revokeMember } from './auth.js';
+import { registerDashboard } from './dashboard.js';
 import { ingestEvents } from './ingest.js';
 import { joinWithCode } from './join.js';
 import { parseOtlpLogsPayload } from './otlp.js';
@@ -332,6 +333,11 @@ export function buildApp(options: AppOptions): FastifyInstance {
       },
     );
   });
+
+  // Last, because it claims a wildcard. Every route above is an exact path and
+  // wins against it in the router regardless of order, but registering the
+  // catch-all after the things it must not catch keeps that visible.
+  registerDashboard(app);
 
   return app;
 }
