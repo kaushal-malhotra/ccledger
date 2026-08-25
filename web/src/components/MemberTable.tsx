@@ -43,12 +43,12 @@ const DEFAULT_SORT = 'share';
 /** The share bar and the number that names it. */
 function ShareCell({ share }: { readonly share: number }): JSX.Element {
   return (
-    <>
+    <span className="share-inner">
       <span className="share-track" aria-hidden="true">
         <span className="share-bar" style={{ width: `${String(Math.max(share, 0))}%` }} />
       </span>
       <span className="share-value">{formatPercent(share)}</span>
-    </>
+    </span>
   );
 }
 

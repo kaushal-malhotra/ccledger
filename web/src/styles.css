@@ -25,7 +25,6 @@
   --accent: #3d6b8f;
   --accent-ink: #2b4f6b;
   --accent-wash: rgb(61 107 143 / 14%);
-  --accent-wash-strong: rgb(61 107 143 / 22%);
   --danger: #a1392a;
   --danger-wash: rgb(161 57 42 / 10%);
   --ok: #3d7a4d;
@@ -49,7 +48,6 @@
     --accent: #8bb4d6;
     --accent-ink: #a8c9e4;
     --accent-wash: rgb(139 180 214 / 16%);
-    --accent-wash-strong: rgb(139 180 214 / 26%);
     --danger: #e0907f;
     --danger-wash: rgb(224 144 127 / 12%);
     --ok: #85bf95;
@@ -191,6 +189,14 @@ a {
   flex-wrap: wrap;
   padding: 16px 0;
   border-bottom: 1px solid var(--line);
+}
+
+/* Nothing but the refresh button, on a view the range does not apply to. The
+   rule above draws a band under the controls; with no controls in it, that band
+   is an empty box the eye has to account for. */
+.toolbar-bare {
+  border-bottom: 0;
+  padding-bottom: 0;
 }
 
 .toolbar-spacer {
@@ -416,6 +422,14 @@ table.data thead th button {
   gap: 6px;
 }
 
+/* The UA stylesheet sets `text-transform: none` on every form control, and a UA
+   declaration beats an inherited value — so the header casing set on `th` never
+   reaches the label inside the button unless it is asked for again here. */
+table.data thead th button {
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+
 table.data thead th button:hover {
   color: var(--ink);
   background: var(--surface-sunken);
@@ -449,9 +463,18 @@ table.data tfoot td {
   background: var(--surface-sunken);
 }
 
+/* `table.data th, table.data td` sets the left default with one class and two
+   elements, which outranks a bare `.num`. The override therefore has to be
+   scoped to the table as well — without it every figure in every column stays
+   left-aligned and merely looks right, because most of the values in a column
+   happen to be the same width. */
 .num {
-  text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+table.data th.num,
+table.data td.num {
+  text-align: right;
 }
 
 .member-name {
@@ -478,30 +501,35 @@ table.data tfoot td {
   white-space: nowrap;
 }
 
-/* The share bar sits behind its number rather than beside it, so the column
-   stays one column wide and the eye still gets a length to compare. The track
-   spans the cell's content box, so a bar at 50% is half the track and means
-   half the tokens — a bar scaled to the largest row would not. */
+/* A gauge beside the number, not a wash behind it: a filled bar drawn under
+   right-aligned text reads as a selection highlight rather than as a length.
+   The track is a fixed width shared by every row, so a bar at half the track
+   means half the tokens — a bar scaled to the largest row would not. */
 .share-cell {
-  position: relative;
-  min-width: 124px;
+  min-width: 136px;
+}
+
+.share-inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .share-track {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 18px;
-  pointer-events: none;
+  flex: none;
+  width: 60px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line-strong);
+  overflow: hidden;
 }
 
 .share-bar {
   display: block;
   height: 100%;
-  border-radius: 2px;
-  background: var(--accent-wash-strong);
+  border-radius: 3px;
+  background: var(--accent);
 }
 
 .share-value {
