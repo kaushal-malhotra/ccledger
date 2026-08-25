@@ -1,0 +1,30 @@
+{
+  // The dashboard's own type-check. The root `tsconfig.json` excludes `web/`
+  // because this half compiles to a browser bundle rather than to `dist/`, so
+  // `npm run typecheck` runs `tsc` twice — once per half — and both must pass.
+  //
+  // The strictness flags are copied from the root config rather than extended
+  // from it: `extends` would also inherit `module: NodeNext` and `outDir`,
+  // neither of which describes a Vite build.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "types": ["vite/client", "node"],
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "noEmit": true
+  },
+  "include": ["src", "vite.config.ts"]
+}

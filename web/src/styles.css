@@ -1,0 +1,694 @@
+/*
+ * ccledger dashboard.
+ *
+ * Plain on purpose. This is a table of numbers that someone reads once a week
+ * to answer one question, so the design budget goes into legibility: tabular
+ * figures so columns line up, one accent colour used only where it carries
+ * meaning, generous row spacing, and no decoration that would compete with the
+ * data. There are no gradients and no shadows beyond a hairline.
+ *
+ * Both themes are defined in custom properties and swapped by
+ * `prefers-color-scheme`. Nothing in the markup knows which one is in force.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  --bg: #fbfbfa;
+  --surface: #ffffff;
+  --surface-sunken: #f4f4f1;
+  --ink: #1b1b19;
+  --ink-muted: #6c6c65;
+  --ink-faint: #98988f;
+  --line: #e6e6e1;
+  --line-strong: #d4d4cc;
+  --accent: #3d6b8f;
+  --accent-ink: #2b4f6b;
+  --accent-wash: rgb(61 107 143 / 14%);
+  --accent-wash-strong: rgb(61 107 143 / 22%);
+  --danger: #a1392a;
+  --danger-wash: rgb(161 57 42 / 10%);
+  --ok: #3d7a4d;
+
+  --radius: 6px;
+  --gap: 24px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413;
+    --surface: #1c1c1a;
+    --surface-sunken: #232320;
+    --ink: #ecebe5;
+    --ink-muted: #a2a099;
+    --ink-faint: #73716b;
+    --line: #2f2f2b;
+    --line-strong: #3e3e38;
+    --accent: #8bb4d6;
+    --accent-ink: #a8c9e4;
+    --accent-wash: rgb(139 180 214 / 16%);
+    --accent-wash-strong: rgb(139 180 214 / 26%);
+    --danger: #e0907f;
+    --danger-wash: rgb(224 144 127 / 12%);
+    --ok: #85bf95;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+code,
+kbd,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+a {
+  color: var(--accent-ink);
+}
+
+/* ---------------------------------------------------------------- layout -- */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.wrap {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 28px;
+}
+
+.topbar {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  min-height: 62px;
+}
+
+.wordmark {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.wordmark .server-name {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.nav {
+  display: flex;
+  gap: 4px;
+}
+
+.main {
+  flex: 1;
+  padding: 28px 0 56px;
+}
+
+.section {
+  margin-top: 32px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.section-head h2 {
+  font-size: 15px;
+}
+
+.section-note {
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+.footer {
+  border-top: 1px solid var(--line);
+  padding: 20px 0 32px;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+.footer p {
+  margin: 0 0 6px;
+  max-width: 78ch;
+}
+
+/* -------------------------------------------------------------- controls -- */
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.segmented button {
+  appearance: none;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.segmented button:last-child {
+  border-right: 0;
+}
+
+.segmented button:hover {
+  background: var(--surface-sunken);
+  color: var(--ink);
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--surface-sunken);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-primary:hover {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn-primary {
+    color: #12181d;
+  }
+}
+
+.btn-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-muted);
+}
+
+.btn-danger {
+  border-color: var(--line-strong);
+  color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: var(--danger-wash);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+select,
+input[type='text'],
+input[type='password'],
+input[type='date'] {
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 10px;
+}
+
+input[type='password'] {
+  font-family: var(--font-mono);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ----------------------------------------------------------------- tiles -- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.tile {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 16px 18px;
+}
+
+.tile-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+}
+
+.tile-value {
+  margin-top: 6px;
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.tile-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----------------------------------------------------------------- table -- */
+
+.table-wrap {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow-x: auto;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+table.data th,
+table.data td {
+  padding: 11px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+table.data thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-strong);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0;
+}
+
+table.data thead th .th-inner {
+  display: block;
+  padding: 10px 14px;
+}
+
+table.data thead th button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  padding: 10px 14px;
+  width: 100%;
+  text-align: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+table.data thead th button:hover {
+  color: var(--ink);
+  background: var(--surface-sunken);
+}
+
+table.data thead th.num button {
+  justify-content: flex-end;
+}
+
+table.data thead th[aria-sort] button {
+  color: var(--ink);
+}
+
+.sort-arrow {
+  font-size: 9px;
+  color: var(--accent);
+}
+
+table.data tbody tr:hover {
+  background: var(--surface-sunken);
+}
+
+table.data tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+table.data tfoot td {
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 0;
+  font-weight: 600;
+  background: var(--surface-sunken);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.member-name {
+  font-weight: 500;
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+.faint {
+  color: var(--ink-faint);
+}
+
+/* Present to a screen reader, absent to everything else. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The share bar sits behind its number rather than beside it, so the column
+   stays one column wide and the eye still gets a length to compare. The track
+   spans the cell's content box, so a bar at 50% is half the track and means
+   half the tokens — a bar scaled to the largest row would not. */
+.share-cell {
+  position: relative;
+  min-width: 124px;
+}
+
+.share-track {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 18px;
+  pointer-events: none;
+}
+
+.share-bar {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent-wash-strong);
+}
+
+.share-value {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  display: inline-block;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 11.5px;
+  color: var(--ink-muted);
+  background: var(--surface-sunken);
+}
+
+.badge-revoked {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-wash);
+}
+
+.badge-active {
+  color: var(--ok);
+  border-color: currentcolor;
+  background: transparent;
+}
+
+abbr.est {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
+/* ---------------------------------------------------------------- states -- */
+
+.notice {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 32px 36px;
+  margin-top: 24px;
+}
+
+.notice h2 {
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+
+.notice p {
+  margin: 0 0 12px;
+  color: var(--ink-muted);
+  max-width: 68ch;
+}
+
+.notice p:last-child {
+  margin-bottom: 0;
+}
+
+.notice ol {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--ink-muted);
+  max-width: 68ch;
+}
+
+.notice li {
+  margin-bottom: 10px;
+}
+
+.notice li:last-child {
+  margin-bottom: 0;
+}
+
+pre.command {
+  margin: 8px 0 0;
+  padding: 10px 14px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink);
+  overflow-x: auto;
+}
+
+.error-banner {
+  border: 1px solid var(--danger);
+  background: var(--danger-wash);
+  color: var(--danger);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+/* A skeleton rather than a spinner: the page keeps its shape while it loads,
+   so nothing jumps when the numbers arrive. */
+.skeleton {
+  background: var(--surface-sunken);
+  border-radius: 3px;
+  color: transparent;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------- token gate -- */
+
+.gate {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.gate-card {
+  width: 100%;
+  max-width: 460px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 32px;
+}
+
+.gate-card h1 {
+  font-size: 19px;
+  margin-bottom: 6px;
+}
+
+.gate-card p {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.gate-card label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.gate-card input {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 14px;
+}
+
+.gate-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.gate-error {
+  margin-top: 12px;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ------------------------------------------------------------ responsive -- */
+
+@media (max-width: 900px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .wrap {
+    padding: 0 18px;
+  }
+}
