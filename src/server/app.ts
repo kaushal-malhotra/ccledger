@@ -21,14 +21,14 @@ import type Database from 'better-sqlite3';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 
-import { requireAdmin, requireMember } from './auth.js';
+import { requireAdmin, requireMember, revokeMember } from './auth.js';
 import { ingestEvents } from './ingest.js';
 import { joinWithCode } from './join.js';
 import { parseOtlpLogsPayload } from './otlp.js';
 import { JSON_CONTENT_TYPE, fail } from './reply.js';
 import { createJoinCodeStore } from '../db/joincodes.js';
-import { ADMIN_API_PREFIX } from '../shared/constants.js';
-import type { JoinRequestBody } from '../shared/types.js';
+import { ADMIN_API_PREFIX, HEALTH_PATH, JOIN_PATH, LEAVE_PATH } from '../shared/constants.js';
+import type { JoinRequestBody, LeaveResponseBody } from '../shared/types.js';
 import { VERSION } from '../shared/version.js';
 
 /** Claude Code batches are kilobytes; 8 MiB is headroom for a backlog flush. */
@@ -183,7 +183,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
     }
   });
 
-  app.get('/health', (_request, reply) => {
+  app.get(HEALTH_PATH, (_request, reply) => {
     reply.code(200).send({
       status: 'ok',
       version: VERSION,
@@ -195,7 +195,7 @@ export function buildApp(options: AppOptions): FastifyInstance {
   // has nothing else yet. Everything that makes that safe — single use, 24 hour
   // expiry, 60 bits of code — is enforced in `joinWithCode`.
   app.post<{ Body: JoinRequestBody }>(
-    '/join',
+    JOIN_PATH,
     { schema: { body: JOIN_BODY_SCHEMA } },
     (request, reply) => {
       const result = joinWithCode(db, joinCodes, request.body);
@@ -208,6 +208,25 @@ export function buildApp(options: AppOptions): FastifyInstance {
       reply.code(200).type(JSON_CONTENT_TYPE).send(result.body);
     },
   );
+
+  // Authenticated by the member's own token, which is the whole design: the one
+  // person who can prove they hold a token is the one person who may throw it
+  // away. Nothing here can revoke anyone else, so it needs no admin and no
+  // confirmation — and `requireMember` has already answered 403 if the token was
+  // revoked before this request, which is why the handler cannot see that case.
+  app.post(LEAVE_PATH, { onRequest: [requireMember(db)] }, (request, reply) => {
+    const member = request.member;
+    if (member === null) {
+      // Unreachable for the same reason as on the ingest route; kept so the
+      // member is a checked fact rather than a non-null assertion.
+      fail(reply, 401, 'unauthenticated');
+      return;
+    }
+    const revoked = revokeMember(db, member.id);
+    request.log.info({ memberId: member.id, revoked }, 'member left');
+    const body: LeaveResponseBody = { member_id: member.id, revoked };
+    reply.code(200).type(JSON_CONTENT_TYPE).send(body);
+  });
 
   // The ingest route and nothing else reads raw bytes. Its own plugin scope, so
   // replacing the content type parsers here cannot reach `/join` or `/api`.

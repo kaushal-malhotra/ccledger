@@ -873,6 +873,77 @@ describe('POST /join', () => {
   });
 });
 
+describe('POST /leave', () => {
+  /** A leave request with whatever credentials the test wants to try. */
+  async function postLeave(app: FastifyInstance, token?: string): Promise<LightMyRequestResponse> {
+    return app.inject({
+      method: 'POST',
+      url: '/leave',
+      headers: {
+        'content-type': 'application/json',
+        ...(token === undefined ? {} : { authorization: `Bearer ${token}` }),
+      },
+      payload: '{}',
+    });
+  }
+
+  /** An empty batch: a valid OTLP payload that stores nothing. */
+  const EMPTY_BATCH = '{"resourceLogs":[]}';
+
+  /** Posts an empty batch as whoever holds `token`. */
+  async function ingestAs(app: FastifyInstance, token: string): Promise<LightMyRequestResponse> {
+    return app.inject({
+      method: 'POST',
+      url: '/v1/logs',
+      headers: { ...JSON_HEADERS, authorization: `Bearer ${token}` },
+      payload: EMPTY_BATCH,
+    });
+  }
+
+  it('revokes the token it was sent, and nothing else', async () => {
+    const { app, db } = freshApp();
+    const otherToken = generateMemberToken();
+    seedMember(db, 'm_fixture_rahim', otherToken);
+
+    const response = await postLeave(app, MEMBER_TOKEN);
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({ member_id: MEMBER_ID, revoked: true });
+    expect((await ingestAs(app, MEMBER_TOKEN)).statusCode).toBe(403);
+    // The teammate who did not leave keeps reporting.
+    expect((await ingestAs(app, otherToken)).statusCode).toBe(200);
+  });
+
+  it('refuses a caller with no token, so nobody can revoke by guessing an id', async () => {
+    const { app } = freshApp();
+
+    const response = await postLeave(app);
+
+    expect(response.statusCode).toBe(401);
+    expect(response.headers['www-authenticate']).toBe('Bearer');
+  });
+
+  it('answers 403 to a token that has already been given up', async () => {
+    const { app, db } = freshApp();
+    revokeMember(db, MEMBER_ID);
+
+    expect((await postLeave(app, MEMBER_TOKEN)).statusCode).toBe(403);
+  });
+
+  it('answers 401 to a token this server has never issued', async () => {
+    const { app } = freshApp();
+
+    expect((await postLeave(app, generateMemberToken())).statusCode).toBe(401);
+  });
+
+  it('does not take the admin token as a member token', async () => {
+    const { app, db } = freshApp();
+    const admin = ensureAdminToken(db).token ?? '';
+
+    expect((await postLeave(app, admin)).statusCode).toBe(401);
+  });
+});
+
 describe('the admin guard on /api', () => {
   /** A GET with whatever credentials the test wants to try. */
   async function get(

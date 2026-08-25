@@ -127,3 +127,20 @@ export const JOIN_CODE_TTL_MS = 24 * 60 * 60 * 1000;
  * route so a route added later is guarded by default rather than on remembering.
  */
 export const ADMIN_API_PREFIX = '/api';
+
+/**
+ * Path an OTLP/HTTP exporter appends to the base endpoint. It is part of the
+ * config contract in PRD section 7 — `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` is
+ * written with this suffix already on it — so it lives here rather than being
+ * spelled out again in every command that has to build or recognise that value.
+ */
+export const OTLP_LOGS_PATH = '/v1/logs';
+
+/** Unauthenticated liveness probe. `doctor` asks this before blaming the token. */
+export const HEALTH_PATH = '/health';
+
+/** Where a join code is spent for a token. */
+export const JOIN_PATH = '/join';
+
+/** Where a member gives its own token up, so the admin can see it is gone. */
+export const LEAVE_PATH = '/leave';

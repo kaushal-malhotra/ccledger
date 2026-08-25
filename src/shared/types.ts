@@ -207,3 +207,14 @@ export interface InvitePayload {
   /** Display name the admin suggested. The joiner may override it. */
   readonly name?: string;
 }
+
+/**
+ * The body `POST /leave` returns. A member revoking its own token is the one
+ * revocation that needs no admin, and `ccledger uninstall` sends it so the
+ * dashboard shows a teammate as gone rather than merely silent.
+ */
+export interface LeaveResponseBody {
+  readonly member_id: string;
+  /** False when the token was already revoked, which is not an error. */
+  readonly revoked: boolean;
+}
