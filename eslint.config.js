@@ -32,13 +32,16 @@ const nodeGlobals = {
  * root tooling files and `test/` sit outside `tsconfig.json`, so the project
  * service would have to be widened just to lint them. The rule that matters
  * here — the ban on `any` — is syntactic and needs no type information.
+ *
+ * `web/` is linted along with `src/`. It is committed source held to the same
+ * rules, and it is type-checked by its own `tsconfig.json` rather than the root
+ * one — which is exactly why leaving it unlinted would be easy to miss.
  */
 export default tseslint.config(
   {
     ignores: [
       'dist/',
       'node_modules/',
-      'web/',
       'captures/',
       'coverage/',
       'src/server/public/',
@@ -58,7 +61,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.ts'],
+    files: ['**/*.ts', '**/*.tsx'],
     extends: [tseslint.configs.recommended],
     rules: {
       // The hard rule from CLAUDE.md: no `any` in committed code, tests included.
