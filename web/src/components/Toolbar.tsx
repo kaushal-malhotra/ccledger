@@ -30,6 +30,12 @@ export interface ToolbarProps {
   readonly sources: readonly SourceUsage[];
   readonly onRefresh: () => void;
   readonly loading: boolean;
+  /**
+   * False on a view the range and source do not apply to. The controls are
+   * hidden rather than disabled: the members list is deliberately all-time, and
+   * a date picker that changes nothing is worse than no date picker.
+   */
+  readonly ranged: boolean;
 }
 
 /** The presets, in the order the control shows them. */
@@ -45,6 +51,17 @@ const PRESETS: readonly RangePreset[] = ['today', '7d', '30d', 'custom'];
  */
 export function Toolbar(props: ToolbarProps): JSX.Element {
   const { preset, range, selection, sources } = props;
+
+  if (!props.ranged) {
+    return (
+      <div className="toolbar toolbar-bare">
+        <div className="toolbar-spacer" />
+        <button className="btn" type="button" onClick={props.onRefresh} disabled={props.loading}>
+          {props.loading ? 'Loading…' : 'Refresh'}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="toolbar">

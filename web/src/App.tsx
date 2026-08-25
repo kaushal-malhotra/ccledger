@@ -263,6 +263,7 @@ export function App(): JSX.Element {
             sources={summary?.sources ?? []}
             onRefresh={refresh}
             loading={loading}
+            ranged={view === 'usage'}
           />
 
           {error !== null && (

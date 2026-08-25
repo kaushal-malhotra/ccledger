@@ -38,6 +38,7 @@ function render(options: {
   readonly sources?: readonly SourceUsage[];
   readonly range?: Range | undefined;
   readonly preset?: 'today' | '7d' | '30d' | 'custom';
+  readonly ranged?: boolean;
 }): string {
   const noop = (): void => {
     /* not exercised by static rendering */
@@ -56,6 +57,7 @@ function render(options: {
       sources={options.sources ?? []}
       onRefresh={noop}
       loading={false}
+      ranged={options.ranged ?? true}
     />,
   );
 }
@@ -92,6 +94,15 @@ describe('Toolbar', () => {
 
     expect(markup).toContain('no source recorded');
     expect(markup).toContain('value="s:none"');
+  });
+
+  it('hides the range and source controls on a view they do not apply to', () => {
+    const markup = render({ ranged: false, sources: [source('sdk', 26)] });
+
+    expect(markup).not.toContain('7 days');
+    expect(markup).not.toContain('source-filter');
+    // Refreshing an all-time list is still meaningful.
+    expect(markup).toContain('Refresh');
   });
 
   it('says so rather than fetching when the custom dates are unusable', () => {
