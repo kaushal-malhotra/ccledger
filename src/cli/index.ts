@@ -23,6 +23,8 @@ import type { ServeOptions } from './serve.js';
 import { DEFAULT_DB_PATH, DEFAULT_HOST, DEFAULT_MODE, DEFAULT_PORT, runServe } from './serve.js';
 import type { SetupOptions } from './setup.js';
 import { runSetup } from './setup.js';
+import type { UninstallOptions } from './uninstall.js';
+import { runUninstall } from './uninstall.js';
 
 /** Deployment shapes `--mode` accepts. */
 const MODES: readonly ServerMode[] = ['laptop', 'vps'];
@@ -103,8 +105,21 @@ export function buildProgram(): Command {
       await runDoctor(doctor.opts<DoctorOptions>());
     });
 
-  // Stage 3's `uninstall` follows. It is absent rather than stubbed so
-  // `ccledger --help` never advertises a no-op.
+  const uninstall = program
+    .command('uninstall')
+    .description('remove the keys ccledger added and forget this machine');
+  uninstall
+    .option('-y, --yes', 'take every offer at its default and ask nothing')
+    .option('--restore-backup', 'put the backup back instead of removing just the five keys')
+    // Declared as a pair so that neither flag has a default: an absent flag has
+    // to mean "ask", which is what makes telling the server an offer rather
+    // than something that happens to a teammate's admin without being raised.
+    .option('--notify', 'tell the server the token is being given up')
+    .option('--no-notify', 'keep the removal to this machine')
+    .action(async () => {
+      await runUninstall(uninstall.opts<UninstallOptions>());
+    });
+
   return program;
 }
 

@@ -70,7 +70,7 @@ describe('buildProgram', () => {
       .commands.map((command) => command.name())
       .sort();
 
-    expect(names).toEqual(['doctor', 'invite', 'serve', 'setup']);
+    expect(names).toEqual(['doctor', 'invite', 'serve', 'setup', 'uninstall']);
   });
 });
 
@@ -193,6 +193,28 @@ describe('client command options', () => {
   it('defaults doctor to human output', () => {
     expect(parseCommand('doctor', ['doctor'])['json']).toBeUndefined();
     expect(parseCommand('doctor', ['doctor', '--json'])['json']).toBe(true);
+  });
+
+  it('leaves uninstall with no answer to any of its offers until one is given', () => {
+    const options = parseCommand('uninstall', ['uninstall']);
+
+    // Undefined rather than true: an absent flag has to mean "ask", or telling
+    // the server stops being an offer and starts being a side effect.
+    expect(options['notify']).toBeUndefined();
+    expect(options['restoreBackup']).toBeUndefined();
+    expect(options['yes']).toBeUndefined();
+  });
+
+  it('reads both spellings of the notify flag', () => {
+    expect(parseCommand('uninstall', ['uninstall', '--notify'])['notify']).toBe(true);
+    expect(parseCommand('uninstall', ['uninstall', '--no-notify'])['notify']).toBe(false);
+  });
+
+  it('takes the uninstall flags it is given', () => {
+    const options = parseCommand('uninstall', ['uninstall', '--yes', '--restore-backup']);
+
+    expect(options['yes']).toBe(true);
+    expect(options['restoreBackup']).toBe(true);
   });
 });
 
