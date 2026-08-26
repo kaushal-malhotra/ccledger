@@ -164,6 +164,40 @@ export const SOURCE_NONE = 'none';
 /** Sessions returned by `GET /api/members/:id`. The response says when it capped. */
 export const MEMBER_SESSIONS_LIMIT = 200;
 
+/**
+ * The `server_config` key holding the IANA zone alert windows are aligned to.
+ *
+ * Stored rather than read from the machine on every boot, because a "weekly"
+ * budget is only meaningful if it resets at the same hour next week. A server
+ * that is moved, containerised, or started under a different `TZ` would
+ * otherwise silently redraw every window boundary — and the debounce key is a
+ * window start, so the first symptom would be an alert firing twice.
+ */
+export const CONFIG_TIMEZONE = 'timezone';
+
+/** Fires returned by `GET /api/alerts`, newest first. */
+export const ALERT_FIRES_LIMIT = 50;
+
+/** How long one webhook attempt may take before it is abandoned. */
+export const WEBHOOK_TIMEOUT_MS = 5000;
+
+/** Attempts after the first. Three tries in all, then the failure is recorded. */
+export const WEBHOOK_RETRIES = 2;
+
+/**
+ * Waits before each retry, in order. Two entries for `WEBHOOK_RETRIES` of two:
+ * long enough for a rate limiter to let go, short enough that a fire is either
+ * delivered or recorded as failed within a few seconds of being raised.
+ */
+export const WEBHOOK_BACKOFF_MS: readonly number[] = [500, 2000];
+
+/**
+ * Characters of a failing webhook's response kept in `alert_fires`. Enough for
+ * `invalid_payload` or a rate-limit message, which is what an admin debugging
+ * their own Slack URL actually needs, without turning the table into a log.
+ */
+export const WEBHOOK_ERROR_LIMIT = 200;
+
 /** Where a join code is spent for a token. */
 export const JOIN_PATH = '/join';
 

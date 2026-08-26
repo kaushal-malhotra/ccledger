@@ -15,6 +15,7 @@
  * the ISO strings the caller sent so a response can be read without a converter.
  */
 
+import type { AlertDeliveryStatus, AlertMetric, AlertWindow } from './alerts.js';
 import type { ModelFamily } from './types.js';
 
 /** Bucket widths `GET /api/timeseries` can aggregate into. */
@@ -239,4 +240,115 @@ export interface RevokeResponse {
   readonly revoked: boolean;
   /** When access actually stopped — the original time on a repeat call. */
   readonly revoked_at: number | null;
+}
+
+/**
+ * One alert rule as the dashboard shows it.
+ *
+ * `member_id` is null for a rule that applies to everyone — evaluated for each
+ * member independently, so one rule reading "over half the week's tokens"
+ * covers a team of any size and keeps covering it as people join.
+ */
+export interface AlertRule {
+  readonly id: string;
+  /** The member this rule watches, or `null` for every member independently. */
+  readonly member_id: string | null;
+  /** Resolved for display; `null` on a rule that names no member. */
+  readonly member_name: string | null;
+  readonly window: AlertWindow;
+  readonly metric: AlertMetric;
+  /** Percent for `share_pct`, tokens for `tokens`, dollars for `cost_usd`. */
+  readonly threshold: number;
+  /** Where a fire is posted, or `null` for a rule that only raises the badge. */
+  readonly webhook_url: string | null;
+  readonly enabled: boolean;
+  readonly created_at: number;
+  readonly updated_at: number;
+}
+
+/**
+ * One recorded fire. The rule's own fields are joined in rather than copied at
+ * fire time, so a rule edited after the fact reads consistently everywhere —
+ * and deleting a rule takes its fires with it, which is why they are never null.
+ */
+export interface AlertFire {
+  readonly id: string;
+  readonly rule_id: string;
+  readonly member_id: string;
+  readonly member_name: string | null;
+  /** Epoch milliseconds. */
+  readonly fired_at: number;
+  /** The metric's value at the moment it crossed. */
+  readonly value: number;
+  /** Start of the window this fire debounces, in epoch milliseconds. */
+  readonly window_start: number;
+  readonly metric: AlertMetric;
+  readonly window: AlertWindow;
+  readonly threshold: number;
+  readonly delivery_status: AlertDeliveryStatus;
+  /** Why the webhook failed, truncated. `null` while it has not. */
+  readonly delivery_error: string | null;
+  readonly delivered_at: number | null;
+  /** Webhook attempts made, including the first. */
+  readonly attempts: number;
+}
+
+/**
+ * One (rule, member) pair at or over its threshold right now.
+ *
+ * "Right now" is the current window, not the range the dashboard is showing:
+ * a badge that changed meaning when someone moved the date picker would be a
+ * badge nobody could act on.
+ */
+export interface AlertState {
+  readonly rule_id: string;
+  readonly member_id: string;
+  readonly member_name: string;
+  readonly metric: AlertMetric;
+  readonly window: AlertWindow;
+  readonly threshold: number;
+  readonly value: number;
+  readonly window_start: number;
+  readonly window_end: number;
+  /** True when this window's fire has already been recorded and debounced. */
+  readonly fired: boolean;
+}
+
+/** `GET /api/alerts`. */
+export interface AlertsResponse {
+  /** The IANA zone every window here is calendar-aligned to. */
+  readonly timezone: string;
+  readonly rules: readonly AlertRule[];
+  /** Newest first, capped at `fires_limit`. */
+  readonly fires: readonly AlertFire[];
+  readonly fires_limit: number;
+  readonly active: readonly AlertState[];
+}
+
+/** The body `POST /api/alerts/rules` takes. */
+export interface AlertRuleBody {
+  /** Omitted or null means every member, evaluated independently. */
+  readonly member_id?: string | null;
+  readonly metric: AlertMetric;
+  readonly window: AlertWindow;
+  readonly threshold: number;
+  readonly webhook_url?: string | null;
+  readonly enabled?: boolean;
+}
+
+/** The body `PATCH /api/alerts/rules/:id` takes: any subset of the same fields. */
+export type AlertRulePatch = Partial<AlertRuleBody>;
+
+/** `POST /api/alerts/rules` and `PATCH /api/alerts/rules/:id`. */
+export interface AlertRuleResponse {
+  readonly rule: AlertRule;
+}
+
+/** `DELETE /api/alerts/rules/:id`. Idempotent, and says what it took with it. */
+export interface AlertRuleDeleteResponse {
+  readonly rule_id: string;
+  /** False when the rule was already gone, which is not an error. */
+  readonly deleted: boolean;
+  /** Fires removed alongside it; they reference the rule and cannot outlive it. */
+  readonly fires_deleted: number;
 }
