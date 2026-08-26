@@ -217,6 +217,7 @@ growing. Please open an issue if you see that.
 | [docs/setup.md](docs/setup.md)               | I am a teammate. What do I have to do?                           |
 | [docs/privacy.md](docs/privacy.md)           | What is this sending about me?                                   |
 | [docs/troubleshoot.md](docs/troubleshoot.md) | Why is there no data?                                            |
+| [docs/deploy-aws.md](docs/deploy-aws.md)     | I want it always on. AWS Lightsail for $5 a month                |
 | [docs/architecture.md](docs/architecture.md) | I want to contribute. Where does what live?                      |
 
 Released versions are on [npm](https://www.npmjs.com/package/@thisissbk/ccledger)

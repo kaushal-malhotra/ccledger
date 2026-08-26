@@ -11,6 +11,34 @@ keys it owns is a breaking change even when no function signature moves.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-26
+
+### Added
+
+- **A guide and a bootstrap script for AWS.** `docs/deploy-aws.md` and
+  `deploy/lightsail.sh` put ccledger on a Lightsail instance for $5 a month,
+  with Caddy in front for TLS and systemd keeping it up. Prices in the guide
+  come from the Lightsail and EC2 pricing APIs rather than from memory, and it
+  says why EC2 is not cheaper — a public IPv4 address has been billable since
+  February 2024 and costs more than the instance it is attached to.
+
+  The script installs the published npm package rather than building the
+  Docker image, because the $5 machine has 512 MB of RAM and building means
+  compiling a native SQLite addon and running a Vite build. Both run out of
+  memory. Anyone who wants the container needs the $7 tier.
+
+  Lambda, App Runner and Fargate-on-EFS are documented as out of scope, with
+  the reasoning: they take away the single SQLite file, and with it the
+  idempotent ingest key, the transactional alert debounce, and a backup that
+  is one file.
+
+### Fixed
+
+- The README on the registry. The 0.1.0 page was published before the scoped
+  name resolved, so its badges pointed at a package npm was still returning
+  404 for and rendered as "package not found". npm serves the README from
+  inside the tarball, frozen at publish time, so only a release can correct it.
+
 ## [0.1.0] - 2026-08-26
 
 First release.
@@ -81,5 +109,6 @@ as too close to an unrelated package; the command it installs is plain
 - Tested against Claude Code 2.1.241. Telemetry attribute names are not a
   stable API.
 
-[unreleased]: https://github.com/shakibbinkabir/ccledger/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/shakibbinkabir/ccledger/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/shakibbinkabir/ccledger/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/shakibbinkabir/ccledger/releases/tag/v0.1.0

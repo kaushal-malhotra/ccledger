@@ -13,6 +13,11 @@ There are two ways to run it.
 | Uptime        | Only while that laptop is awake and on the network     | Always                             |
 | Setup         | `npm install -g @thisissbk/ccledger && ccledger serve` | `docker compose up -d`             |
 
+On AWS, the cheapest always-on option is a Lightsail instance at $5 a month;
+[deploy-aws.md](deploy-aws.md) is that path end to end, and it installs from
+npm rather than Docker because the $5 machine has too little memory to build
+the image.
+
 Laptop mode is the fast way to find out whether the thing is useful to you.
 Move to VPS mode when it is, or immediately if anyone on the team works
 remotely — laptop mode sends bearer tokens over unencrypted HTTP and should

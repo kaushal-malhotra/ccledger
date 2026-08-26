@@ -48,7 +48,7 @@ const FORBIDDEN = [
   [/\.map$/, 'sourcemaps are weight no consumer of a CLI reads'],
   [/\.d\.[cm]?ts$/, 'nothing imports types from this package'],
   [/^src\//, 'the published package ships the build, not the sources'],
-  [/^(test|web|docker|scripts|\.github)\//, 'development-only trees'],
+  [/^(test|web|docker|deploy|scripts|\.github)\//, 'development-only trees'],
   [/\.db(-wal|-shm)?$/, 'a local database would ship somebody’s telemetry'],
   [/(^|\/)\.env$/, 'local secrets'],
 ];

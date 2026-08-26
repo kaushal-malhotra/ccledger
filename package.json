@@ -1,6 +1,6 @@
 {
   "name": "@thisissbk/ccledger",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "description": "Self-hosted Claude Code usage dashboard that ingests OpenTelemetry log events into SQLite.",
   "license": "MIT",
