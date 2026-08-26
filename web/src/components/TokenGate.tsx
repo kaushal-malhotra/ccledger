@@ -4,9 +4,11 @@ import { useState } from 'react';
 /** What `TokenGate` needs from the app around it. */
 export interface TokenGateProps {
   /** Called with a non-empty token when the form is submitted. */
-  readonly onSubmit: (token: string) => void;
+  readonly onSubmit: (token: string, remember: boolean) => void;
   /** Why the last attempt failed, if one did. */
   readonly error: string | null;
+  /** Whether "remember me" starts ticked, from whatever a previous visit chose. */
+  readonly rememberInitially?: boolean;
 }
 
 /**
@@ -16,14 +18,23 @@ export interface TokenGateProps {
  * things a new admin has to be told exactly once. `serve` prints the token when
  * it first issues one and never again, so the honest answer to "I lost it" is
  * `--rotate-admin-token`, not a recovery flow.
+ *
+ * The checkbox is off by default and says what it does in the words that
+ * matter — on this device, until you lock. Somebody opening this on a machine
+ * that is not theirs should be able to decline without reading a paragraph.
  */
-export function TokenGate({ onSubmit, error }: TokenGateProps): JSX.Element {
+export function TokenGate({
+  onSubmit,
+  error,
+  rememberInitially = false,
+}: TokenGateProps): JSX.Element {
   const [value, setValue] = useState('');
+  const [remember, setRemember] = useState(rememberInitially);
   const trimmed = value.trim();
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
-    if (trimmed !== '') onSubmit(trimmed);
+    if (trimmed !== '') onSubmit(trimmed, remember);
   }
 
   return (
@@ -32,8 +43,8 @@ export function TokenGate({ onSubmit, error }: TokenGateProps): JSX.Element {
         <h1>ccledger</h1>
         <p>
           This dashboard needs the admin token that <code>ccledger serve</code> printed when it
-          first started. It is held in memory for this tab only — never written to storage — so a
-          reload asks again.
+          first started. It is kept for this tab so a reload does not ask again, and erased when you
+          lock or close it.
         </p>
 
         <label htmlFor="admin-token">Admin token</label>
@@ -49,6 +60,24 @@ export function TokenGate({ onSubmit, error }: TokenGateProps): JSX.Element {
           spellCheck={false}
           autoFocus
         />
+
+        <label className="gate-remember" htmlFor="remember-token">
+          <input
+            id="remember-token"
+            type="checkbox"
+            checked={remember}
+            onChange={(event) => {
+              setRemember(event.target.checked);
+            }}
+          />
+          <span>
+            Remember me on this device
+            <span className="faint">
+              {' '}
+              — stays after the browser closes. Not on a shared machine.
+            </span>
+          </span>
+        </label>
 
         <div className="gate-actions">
           <button className="btn btn-primary" type="submit" disabled={trimmed === ''}>
