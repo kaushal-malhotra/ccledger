@@ -71,8 +71,7 @@ anything both need is `src/shared/` rather than an import across.
   `db`, `server`, `cli`, `web`, `shared`. One commit per component, not one per
   build stage. The body says why, not what the diff already shows.
 - Commit only once the gate is green: `format:check`, `lint`, `typecheck`,
-  `test`, `build`. See "Before anything: version control" in `BUILD_STAGES.md`
-  for the per-stage commit breakdown.
+  `test`, `build`.
 - `captures/` is gitignored. The raw OTLP payloads carry a real email and
   account identifiers; only the sanitised `test/fixtures/` copies are committed.
 - LF line endings, pinned by `.gitattributes`. Prettier is `endOfLine: "lf"`

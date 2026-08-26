@@ -10,13 +10,3 @@ captures/
 # Byte-verbatim Claude Code captures with PII replaced by sentinels. The parser
 # tests assert against them exactly, so they are checked in as captured.
 test/fixtures/
-
-# Stage-0 tooling, kept as written.
-capture.mjs
-inspect.mjs
-
-# Hand-written specification documents. Their wrapping and list style is
-# deliberate; Prettier's markdown pass is churn against them.
-PRD.md
-BUILD_STAGES.md
-OPEN_SOURCE_GUIDE.md
