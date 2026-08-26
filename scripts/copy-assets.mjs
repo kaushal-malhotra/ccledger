@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 const FILES = [
   ['../src/db/schema.sql', '../dist/db/schema.sql'],
   ['../src/db/schema-identity.sql', '../dist/db/schema-identity.sql'],
+  ['../src/db/schema-alerts.sql', '../dist/db/schema-alerts.sql'],
 ];
 
 /**

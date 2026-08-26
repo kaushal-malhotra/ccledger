@@ -104,6 +104,26 @@ export const MIGRATIONS: readonly Migration[] = [
       addColumn(db, 'members', 'join_os', 'TEXT');
     },
   },
+  {
+    version: 4,
+    name: 'alerting',
+    up: (db) => {
+      db.exec(readSqlAsset('schema-alerts.sql'));
+      // When a rule was written and when it was last edited. Neither is in the
+      // PRD's column list because neither is needed to evaluate a rule; both
+      // are needed to show one, and "who changed the budget on Tuesday" is the
+      // first question asked after an alert nobody expected.
+      addColumn(db, 'alert_rules', 'created_at', 'INTEGER NOT NULL DEFAULT 0');
+      addColumn(db, 'alert_rules', 'updated_at', 'INTEGER NOT NULL DEFAULT 0');
+      // What became of the webhook. A fire is recorded before delivery is
+      // attempted — that is what makes the debounce atomic — so without these
+      // the row would say a notification went out when it may not have.
+      addColumn(db, 'alert_fires', 'delivery_status', "TEXT NOT NULL DEFAULT 'pending'");
+      addColumn(db, 'alert_fires', 'delivery_error', 'TEXT');
+      addColumn(db, 'alert_fires', 'delivered_at', 'INTEGER');
+      addColumn(db, 'alert_fires', 'attempts', 'INTEGER NOT NULL DEFAULT 0');
+    },
+  },
 ];
 
 /** Highest version this build knows how to apply. */
