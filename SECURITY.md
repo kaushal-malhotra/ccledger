@@ -14,7 +14,7 @@ Two private channels, either is fine:
    [github.com/shakibbinkabir/ccledger](https://github.com/shakibbinkabir/ccledger/security/advisories/new),
    which is preferred because the discussion, the fix and the CVE all stay in
    one place.
-2. **Email** — capecconsulting@gmail.com, with `ccledger security` in the
+2. **Email** — shakibbinkabir@gmail.com, with `ccledger security` in the
    subject line.
 
 Useful in a report:
