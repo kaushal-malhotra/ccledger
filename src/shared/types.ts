@@ -195,7 +195,7 @@ export interface JoinResponseBody {
 
 /**
  * What an invite string carries. Encoded as one base64url blob so a teammate
- * has exactly one thing to paste, per PRD section 6.
+ * has exactly one thing to paste.
  */
 export interface InvitePayload {
   /** Format version. Bumped if the shape ever changes. */

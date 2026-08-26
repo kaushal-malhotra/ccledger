@@ -110,7 +110,7 @@ export const MIGRATIONS: readonly Migration[] = [
     up: (db) => {
       db.exec(readSqlAsset('schema-alerts.sql'));
       // When a rule was written and when it was last edited. Neither is in the
-      // PRD's column list because neither is needed to evaluate a rule; both
+      // the original column list because neither is needed to evaluate a rule; both
       // are needed to show one, and "who changed the budget on Tuesday" is the
       // first question asked after an alert nobody expected.
       addColumn(db, 'alert_rules', 'created_at', 'INTEGER NOT NULL DEFAULT 0');

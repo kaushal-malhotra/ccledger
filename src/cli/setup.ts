@@ -44,7 +44,7 @@ import {
 import { digestValue, writeState } from './state.js';
 
 /**
- * PRD section 11, verbatim. It is quoted rather than paraphrased on purpose:
+ * The disclosure, verbatim. It is quoted rather than paraphrased on purpose:
  * people are being asked to install monitoring at a manager's request, and what
  * makes that acceptable is being able to read exactly what it does, in the same
  * words every time, before anything is written.

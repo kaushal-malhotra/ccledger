@@ -197,7 +197,7 @@ describe('runSetup', () => {
     );
 
     expect(run.code).toBe(1);
-    // The block is quoted from the PRD and has to arrive intact.
+    // The disclosure is quoted verbatim and has to arrive intact.
     expect(run.out).toContain('ccledger will send, per API request:');
     expect(run.out).toContain('  model name, token counts, duration, timestamp, session id');
     expect(run.out).toContain('It will NOT send:');

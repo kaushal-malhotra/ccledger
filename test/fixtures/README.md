@@ -1,8 +1,7 @@
 # Fixtures
 
 Two real OTLP/HTTP JSON log payloads captured from **Claude Code 2.1.241** on
-Windows 11 (VS Code terminal) on 2026-08-23, using `capture.mjs` at the repo
-root. `001.json` holds six log records, `002.json` holds four.
+Windows 11 (VS Code terminal) on 2026-08-23. `001.json` holds six log records, `002.json` holds four.
 
 They are byte-for-byte the captured payloads **except** for four attribute
 values, which were replaced with obvious sentinels so the capturing account's
@@ -15,8 +14,7 @@ identity is not committed to a public repo:
 | `user.account_id`   | `user_012FIXTUREACCOUNTID000`          |
 | `organization.id`   | `11111111-1111-4111-8111-111111111111` |
 
-Those four attributes are exactly the ones ccledger drops at parse time
-(PRD §9, §11), so the substitution costs no test coverage — and the sentinels
+Those four attributes are exactly the ones ccledger drops at parse time, so the substitution costs no test coverage — and the sentinels
 are distinctive enough to grep a whole SQLite file for, which is how
 `test/ingest.integration.test.ts` proves no PII is persisted.
 

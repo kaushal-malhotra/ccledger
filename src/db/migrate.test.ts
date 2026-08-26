@@ -16,7 +16,7 @@ import {
 } from '../shared/constants.js';
 
 /**
- * Tables PRD section 8 defines, plus the runner's own bookkeeping table and the
+ * Tables `schema.sql` defines, plus the runner’s own bookkeeping table and the
  * two identity tables migration 3 adds.
  */
 const EXPECTED_TABLES = [
@@ -30,14 +30,14 @@ const EXPECTED_TABLES = [
   'server_config',
 ];
 
-/** The three indexes PRD section 8 requires, as `[name, columns]`. */
+/** The three indexes `schema.sql` requires, as `[name, columns]`. */
 const EXPECTED_INDEXES: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['idx_requests_ts', ['ts']],
   ['idx_requests_member_ts', ['member_id', 'ts']],
   ['idx_requests_model', ['model']],
 ];
 
-/** `requests` columns in declared order, straight from PRD section 8. */
+/** `requests` columns in declared order, straight from `schema.sql`. */
 const REQUESTS_COLUMNS = [
   'id',
   'ts',
@@ -171,7 +171,7 @@ describe('runMigrations', () => {
     });
   });
 
-  it('creates the three indexes PRD section 8 requires', () => {
+  it('creates the three indexes `schema.sql` requires', () => {
     const db = open(':memory:');
     runMigrations(db);
 

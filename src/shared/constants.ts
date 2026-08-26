@@ -1,7 +1,7 @@
 /** Constants shared between the CLI and the server. */
 
 /**
- * Attributes dropped at parse time and never persisted (PRD sections 9 and 11).
+ * Attributes dropped at parse time and never persisted.
  * They are identical across everyone on a shared account, so they carry no
  * attribution value — and not storing them is what makes `privacy.md` true by
  * construction.
@@ -119,7 +119,7 @@ export const JOIN_CODE_GROUP_LENGTH = 4;
 /** Separator between groups in the canonical form. */
 export const JOIN_CODE_SEPARATOR = '-';
 
-/** How long a join code stays claimable. PRD section 11: single use, 24 hours. */
+/** How long a join code stays claimable. Single use, 24 hours. */
 export const JOIN_CODE_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -130,7 +130,7 @@ export const ADMIN_API_PREFIX = '/api';
 
 /**
  * Path an OTLP/HTTP exporter appends to the base endpoint. It is part of the
- * config contract in PRD section 7 — `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` is
+ * config contract — `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` is
  * written with this suffix already on it — so it lives here rather than being
  * spelled out again in every command that has to build or recognise that value.
  */

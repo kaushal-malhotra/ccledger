@@ -1,4 +1,4 @@
--- ccledger schema, PRD section 8. Applied whole by migration 1 via db.exec().
+-- ccledger schema. Applied whole by migration 1 via db.exec().
 --
 -- Every statement is IF NOT EXISTS: the migration runner is the authority on
 -- what has run, and a half-stamped database must still be re-runnable by hand.

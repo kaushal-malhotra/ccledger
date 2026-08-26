@@ -15,7 +15,7 @@ import { join } from 'node:path';
 /** Claude Code's own directory under the home directory. */
 export const CLAUDE_DIR_NAME = '.claude';
 
-/** The file that carries the config contract, PRD section 7. */
+/** The file that carries the config contract: the five keys ccledger owns. */
 export const SETTINGS_FILE_NAME = 'settings.json';
 
 /** Where Claude Code writes a session's transcripts. `doctor` reads its mtimes. */

@@ -59,7 +59,7 @@ export interface JoinCodeLookup {
 export interface CreateJoinCodeOptions {
   /** Clock, for tests. Defaults to `Date.now()`. */
   readonly now?: number;
-  /** Lifetime in milliseconds. Defaults to the 24 hours PRD section 11 sets. */
+  /** Lifetime in milliseconds. Defaults to 24 hours. */
   readonly ttlMs?: number;
 }
 

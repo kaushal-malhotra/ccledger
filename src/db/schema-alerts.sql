@@ -1,10 +1,10 @@
 -- ccledger alerting schema, applied whole by migration 4 via db.exec().
 --
--- The two tables themselves came with migration 1, straight from the shape in
--- PRD section 8. What migration 4 adds is everything evaluation and delivery
--- need that a column list could not say: the indexes, plus — in migrate.ts,
--- because SQLite has no `ADD COLUMN IF NOT EXISTS` — the columns recording what
--- became of each webhook.
+-- The two tables themselves came with migration 1, straight from the shape
+-- `schema.sql` declares. What migration 4 adds is everything evaluation and
+-- delivery need that a column list could not say: the indexes, plus — because
+-- SQLite has no `ADD COLUMN IF NOT EXISTS`, in migrate.ts — the columns
+-- recording what became of each webhook.
 --
 -- Same rule as the other schema files: every statement is IF NOT EXISTS, so a
 -- database left half-migrated by a crash can be brought forward by hand.
