@@ -8,6 +8,11 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
+    // For `scripts/*.mjs`, which `test/` imports so that release tooling is
+    // covered by the same gate as everything else. Inference only —
+    // `checkJs` stays off, because those files are plain JavaScript by
+    // choice: they run under bare `node` in a workflow, before any build.
+    "allowJs": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
 

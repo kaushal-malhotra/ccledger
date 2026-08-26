@@ -1,0 +1,88 @@
+# The commit gate, run on every push and pull request.
+#
+# The matrix is wide on purpose. ccledger writes to `~/.claude/settings.json` on
+# a teammate's own machine and opens a native SQLite build, and both of those
+# are where cross-platform bugs actually live — a path joined with the wrong
+# separator, a file rewritten with the wrong line endings, a prebuilt binary
+# that exists for one platform and not another. None of it is visible on Linux
+# alone.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run's answer irrelevant.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: ${{ matrix.os }} · node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should not hide whether the others pass; that
+      # difference is usually the diagnosis.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # `ci`, not `install`: the lockfile decides, and a resolution that drifts
+      # between a developer's machine and this one is itself a failure.
+      - run: npm ci
+
+      # First, because it is the fastest way to fail and the most likely thing
+      # to differ per platform. Prettier is configured `endOfLine: "lf"`, so a
+      # Windows checkout without the `.gitattributes` rule fails right here
+      # rather than somewhere confusing later.
+      - run: npm run format:check
+
+      - run: npm run lint
+
+      # Both halves: `src/` plus `test/` against the root config, and `web/`
+      # against its own.
+      - run: npm run typecheck
+
+      - run: npm test
+
+      # Last because it is the slowest, and because a build that fails after
+      # green tests is a packaging problem rather than a code one.
+      - run: npm run build
+
+  package:
+    # What `npm publish` would actually upload. Separate from the matrix because
+    # the tarball's contents do not vary by platform, and one job answering the
+    # question is enough.
+    name: tarball contents
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      # Asserts the dashboard, the schema files and the entry point are all in
+      # the tarball, and that nothing private is. Every one of those failures is
+      # silent at install time and only shows up on a user's first run.
+      - run: npm run verify:package

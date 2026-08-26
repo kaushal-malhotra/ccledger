@@ -1,0 +1,105 @@
+# Publish to npm and open a GitHub Release, on a version tag.
+#
+#   npm version minor          # writes package.json, commits, tags v0.2.0
+#   git push --follow-tags
+#
+# Everything below is decided by the tag. Nothing here takes an input, so a
+# release cannot be started against the wrong commit by mistyping a form.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Creating the GitHub Release.
+      contents: write
+      # The OIDC token npm exchanges for a provenance attestation. Without it
+      # `--provenance` fails, rather than quietly publishing without one.
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, so release notes can reference what came before and
+          # GitHub's generated-notes fallback has commits to work from.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          # Points npm at the public registry and writes the .npmrc that
+          # NODE_AUTH_TOKEN below is read through.
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      # The tag is the only input, so it has to agree with the thing being
+      # published. A tag one version ahead of package.json publishes the old
+      # version under a new name and is not fixable afterwards — npm does not
+      # allow republishing a version, even a deleted one.
+      - name: Check the tag matches package.json
+        run: |
+          tag="${GITHUB_REF#refs/tags/v}"
+          packaged="$(node -p 'require("./package.json").version')"
+          if [ "$tag" != "$packaged" ]; then
+            echo "::error::tag v$tag does not match package.json version $packaged"
+            exit 1
+          fi
+          echo "releasing $packaged"
+
+      # The same gate as CI. CI has already run on this commit, but a tag can
+      # be pushed to any commit, including one that never passed.
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+
+      - run: npm run build
+      - run: npm run verify:package
+
+      # Signed provenance links this tarball to this workflow run and this
+      # commit, so anyone can check that what is on the registry was built from
+      # what is in the repository.
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Written to a file rather than an output: release bodies are multi-line
+      # and contain characters that do not survive being passed as a shell
+      # argument.
+      - name: Collect the release notes
+        id: notes
+        run: |
+          version="${GITHUB_REF#refs/tags/v}"
+          if node scripts/changelog-notes.mjs "$version" CHANGELOG.md > notes.md; then
+            echo "generate=false" >> "$GITHUB_OUTPUT"
+          else
+            # No section for this version, or no changelog yet. Better a
+            # generated body than a failed release after a successful publish.
+            echo "::warning::no CHANGELOG.md section for $version; using generated notes"
+            : > notes.md
+            echo "generate=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          GENERATE: ${{ steps.notes.outputs.generate }}
+        run: |
+          if [ "$GENERATE" = "true" ]; then
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file notes.md
+          fi
