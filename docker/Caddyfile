@@ -1,0 +1,38 @@
+# Caddy in front of ccledger: TLS, and nothing else.
+#
+# The certificate is obtained and renewed automatically from Let's Encrypt on
+# the first request to the domain. Nothing here needs an admin to run certbot,
+# copy a PEM, or remember a renewal date.
+
+{
+	# Where Let's Encrypt sends expiry warnings if renewal ever stops working.
+	email {$CCLEDGER_ACME_EMAIL}
+}
+
+{$CCLEDGER_DOMAIN} {
+	# ccledger is the service name on the compose network; 4318 is not published
+	# to the host, so this is the only way in. Caddy sets X-Forwarded-For,
+	# -Proto and -Host on its own, so there is nothing to add here.
+	reverse_proxy ccledger:4318
+
+	# Claude Code flushes OTLP batches over one connection; the default is
+	# generous enough, and this only says so explicitly.
+	request_body {
+		max_size 8MB
+	}
+
+	encode gzip
+
+	# HSTS. Deliberate rather than inherited: once a browser has seen this it
+	# will refuse plain HTTP to this domain for a year, which is correct for a
+	# host that exists to serve a dashboard over TLS — and worth knowing about
+	# before pointing a domain you also use for something else at it.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	log {
+		output stderr
+		format console
+	}
+}

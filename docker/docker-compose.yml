@@ -1,0 +1,83 @@
+# ccledger — VPS mode.
+#
+#   cp .env.example .env      # set CCLEDGER_DOMAIN and CCLEDGER_ACME_EMAIL
+#   docker compose up -d
+#
+# Point the domain's A record at this host first. Caddy obtains the certificate
+# on the first request, which needs port 80 and 443 reachable from the internet.
+#
+# Run this from the `docker/` directory. The build context is the repository
+# root, one level up, because the image is built from source in this checkout.
+
+name: ccledger
+
+services:
+  ccledger:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    # No `ports:`. The only route in is Caddy, over the private network below,
+    # so nothing on this host answers on 4318 and no firewall rule is load
+    # bearing. Publishing it would put an unencrypted ingest endpoint on the
+    # public internet alongside the TLS one.
+    expose:
+      - '4318'
+    environment:
+      # Alert day and week windows are calendar-aligned to this zone. Changing
+      # it later moves every window boundary, which can let a budget that has
+      # already fired this week fire again, so pick it once at install.
+      TZ: ${CCLEDGER_TIMEZONE:-UTC}
+    # The domain reaches the process here, and only here: `serve` writes it to
+    # the database on every boot and `ccledger invite` reads it back, so every
+    # invite carries the public URL without the admin retyping it.
+    command:
+      - serve
+      - --mode=vps
+      - --db=/data/ccledger.db
+      - --public-url=https://${CCLEDGER_DOMAIN:?set CCLEDGER_DOMAIN in .env}
+    volumes:
+      - ccledger-data:/data
+    networks:
+      - ccledger
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      # QUIC. Harmless if the host blocks UDP; HTTP/2 over TCP still serves.
+      - '443:443/udp'
+    environment:
+      CCLEDGER_DOMAIN: ${CCLEDGER_DOMAIN:?set CCLEDGER_DOMAIN in .env}
+      CCLEDGER_ACME_EMAIL: ${CCLEDGER_ACME_EMAIL:?set CCLEDGER_ACME_EMAIL in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Holds the certificates and the ACME account key. Losing this means
+      # re-issuing on next boot, which Let's Encrypt rate-limits, so it is a
+      # named volume rather than something that disappears with the container.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - ccledger
+    networks:
+      - ccledger
+
+volumes:
+  # The database, the one piece of state worth keeping. `ccledger backup` reads
+  # it through a running container:
+  #
+  #   docker compose exec ccledger \
+  #     node dist/cli/index.js backup /data/ccledger-$(date +%F).db --db /data/ccledger.db
+  #   docker compose cp ccledger:/data/ccledger-$(date +%F).db .
+  #
+  # Backing it up by copying this volume's files while the server is running is
+  # the thing to avoid: in WAL mode the committed state spans ccledger.db and
+  # ccledger.db-wal, and a file-level copy catches them out of step.
+  ccledger-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  ccledger:

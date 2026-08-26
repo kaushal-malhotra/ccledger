@@ -1,0 +1,47 @@
+# What never enters the build context. The context is the repository root, so
+# this is also what keeps `docker build` from uploading a few hundred megabytes
+# of node_modules before it starts.
+
+# Host-built. better-sqlite3 is a native addon compiled against the host's libc
+# and Node ABI, and copying a glibc build into an Alpine image produces a
+# container that starts and then fails on the first query. The image runs
+# `npm ci` itself.
+node_modules/
+
+# Built inside the image by `npm run build`. A host build copied in would be
+# whatever happened to be lying around, which is the classic way a release ships
+# code nobody can find in the tree.
+dist/
+src/server/public/
+
+# Raw stage-0 OTLP captures. These carry the capturing account's real email and
+# account identifiers, and an image layer is forever — a deleted file in a later
+# layer is still in the one before it. Never in the context, so never in a layer.
+captures/
+
+# Local state that would either bloat the image or, in the case of a database,
+# ship somebody's telemetry inside it.
+*.db
+*.db-wal
+*.db-shm
+.env
+coverage/
+
+.git/
+.github/
+.gitattributes
+.gitignore
+
+# Editor and OS noise.
+.DS_Store
+.vscode/
+.idea/
+
+# Documentation and specifications. Read on the web, not from inside a running
+# container.
+*.md
+docs/
+
+# Stage-0 capture tooling, which is developer scaffolding rather than product.
+capture.mjs
+inspect.mjs
