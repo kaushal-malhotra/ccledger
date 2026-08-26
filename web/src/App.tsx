@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type {
   AlertRuleBody,
+  InviteResponse,
+  InvitesResponse,
   AlertState,
   AlertsResponse,
   MemberDetailResponse,
@@ -16,7 +18,9 @@ import {
   createAlertRule,
   deleteAlertRule,
   fetchAlerts,
+  createInvite,
   fetchHealth,
+  fetchInvites,
   fetchMemberDetail,
   fetchMembers,
   fetchModels,
@@ -32,6 +36,7 @@ import { EmptyState } from './components/EmptyState.js';
 import type { EmptyKind } from './components/EmptyState.js';
 import { MemberDetail } from './components/MemberDetail.js';
 import { MemberTable } from './components/MemberTable.js';
+import { InvitePanel } from './components/InvitePanel.js';
 import { MembersView } from './components/MembersView.js';
 import { ModelBars } from './components/ModelBars.js';
 import { StatTiles } from './components/StatTiles.js';
@@ -53,7 +58,13 @@ import {
   tzOffsetMinutes,
 } from './lib/range.js';
 import { memberTrends } from './lib/series.js';
-import { tokenFromHash } from './lib/token.js';
+import {
+  forgetToken,
+  isRemembered,
+  rememberToken,
+  storedToken,
+  tokenFromHash,
+} from './lib/token.js';
 
 /** The three things the shell can show. */
 type View = 'usage' | 'members' | 'settings';
@@ -92,7 +103,9 @@ const NO_ALERTS: ReadonlyMap<string, readonly AlertState[]> = new Map();
  * two different ranges without saying so.
  */
 export function App(): JSX.Element {
-  const [token, setToken] = useState<string | null>(() => tokenFromHash(window.location.hash));
+  const [token, setToken] = useState<string | null>(
+    () => tokenFromHash(window.location.hash) ?? storedToken(),
+  );
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [version, setVersion] = useState<string | null>(null);
   const [view, setView] = useState<View>('usage');
@@ -113,13 +126,18 @@ export function App(): JSX.Element {
   const [models, setModels] = useState<ModelsResponse | null>(null);
   const [alerts, setAlerts] = useState<AlertsResponse | null>(null);
   const [detail, setDetail] = useState<MemberDetailResponse | null>(null);
+  const [invites, setInvites] = useState<InvitesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // The token has been read out of the fragment by now, so take it out of the
   // address bar before anyone screenshots the window or shares the link.
   useEffect(() => {
-    if (tokenFromHash(window.location.hash) === null) return;
+    const fromHash = tokenFromHash(window.location.hash);
+    if (fromHash === null) return;
+    // Tab-scoped only. Arriving with a token in the URL is not consent to
+    // leave it on the disk; the checkbox on the gate is.
+    rememberToken(fromHash, false);
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
   }, []);
 
@@ -151,7 +169,9 @@ export function App(): JSX.Element {
 
   const handleFailure = useCallback((cause: unknown): void => {
     if (isAuthFailure(cause)) {
+      forgetToken();
       setToken(null);
+      setInvites(null);
       setSummary(null);
       setMembers(null);
       setTimeseries(null);
@@ -163,6 +183,22 @@ export function App(): JSX.Element {
     }
     setError(messageOf(cause));
   }, []);
+
+  // Fetched when the Members view is opened rather than alongside the ranged
+  // endpoints: it does not vary with the range and nobody watches it change.
+  useEffect(() => {
+    if (token === null || view !== 'members') return undefined;
+    const controller = new AbortController();
+    fetchInvites(token, controller.signal)
+      .then(setInvites)
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        handleFailure(cause);
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [token, view, reloadKey, handleFailure]);
 
   useEffect(() => {
     if (token === null || request === undefined) return undefined;
@@ -330,13 +366,27 @@ export function App(): JSX.Element {
     return known?.display_name ?? selected;
   }, [selected, members, summary]);
 
+  const handleCreateInvite = useCallback(
+    async (displayName: string): Promise<InviteResponse> => {
+      if (token === null) throw new Error('not authenticated');
+      const created = await createInvite(displayName, token);
+      // Refresh rather than push: the list is the server's answer, and an
+      // invite claimed between the two calls should drop off it.
+      setInvites(await fetchInvites(token));
+      return created;
+    },
+    [token],
+  );
+
   if (token === null) {
     return (
       <TokenGate
         error={tokenError}
-        onSubmit={(next) => {
+        rememberInitially={isRemembered()}
+        onSubmit={(next, remember) => {
           setTokenError(null);
           setError(null);
+          rememberToken(next, remember);
           setToken(next);
         }}
       />
@@ -390,8 +440,9 @@ export function App(): JSX.Element {
             <button
               className="btn btn-quiet"
               type="button"
-              title="Forget the admin token in this tab"
+              title="Forget the admin token on this device"
               onClick={() => {
+                forgetToken();
                 setToken(null);
                 setSummary(null);
                 setMembers(null);
@@ -502,6 +553,12 @@ export function App(): JSX.Element {
                 <span className="section-note">all time, not the selected range</span>
               </div>
 
+              <InvitePanel
+                endpoint={invites?.endpoint ?? null}
+                invites={invites?.invites ?? []}
+                onCreate={handleCreateInvite}
+                now={asOf}
+              />
               {members !== null && members.length === 0 ? (
                 <EmptyState
                   kind="no-members"

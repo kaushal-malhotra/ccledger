@@ -1,12 +1,10 @@
 /**
  * Talking to `/api`.
  *
- * The admin token is passed in on every call rather than held here. That is the
- * whole of the storage policy: there is no module-level variable to read, no
- * `localStorage`, no cookie, nothing that survives the tab. React state holds
- * it, a reload asks for it again, and a shared machine forgets it when the tab
- * closes — which is the correct behaviour for a credential that grants every
- * teammate's usage history.
+ * The admin token is passed in on every call rather than held here. There is no
+ * module-level variable to read and no cookie: React state owns it, and where
+ * it is kept between visits is `lib/token.ts`'s decision alone. Keeping that in
+ * one place is what lets "erase it" be one function rather than a search.
  *
  * `import type` is the only thing that crosses into `src/`. The response shapes
  * come from `src/shared/api.ts` so the dashboard cannot drift from the server,
@@ -20,6 +18,8 @@ import type {
   AlertRulePatch,
   AlertRuleResponse,
   AlertsResponse,
+  InviteResponse,
+  InvitesResponse,
   MemberDetailResponse,
   MembersResponse,
   ModelsResponse,
@@ -242,4 +242,14 @@ export async function revokeMember(memberId: string, token: string): Promise<Rev
   });
   if (!response.ok) throw new ApiError(response.status, await errorMessage(response));
   return (await response.json()) as RevokeResponse;
+}
+
+/** `GET /api/invites`: what has been issued and not claimed. */
+export function fetchInvites(token: string, signal?: AbortSignal): Promise<InvitesResponse> {
+  return getJson<InvitesResponse>('/api/invites', {}, token, signal);
+}
+
+/** `POST /api/invites`. Returns the whole line to send a teammate. */
+export function createInvite(displayName: string, token: string): Promise<InviteResponse> {
+  return sendJson<InviteResponse>('/api/invites', 'POST', token, { display_name: displayName });
 }

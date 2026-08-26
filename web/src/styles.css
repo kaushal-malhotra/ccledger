@@ -1148,3 +1148,123 @@ pre.command {
     padding: 14px;
   }
 }
+
+/* Adding a teammate, above the member list. Same card as the charts use, so
+   the two views read as one surface rather than two designs. */
+.invite-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 16px 18px 18px;
+  margin-bottom: var(--gap);
+}
+
+.invite-panel h2 {
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.invite-panel > p {
+  font-size: 12.5px;
+  margin-bottom: 12px;
+  max-width: 62ch;
+}
+
+.invite-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.invite-form input {
+  flex: 1 1 240px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.invite-form input:disabled {
+  opacity: 0.55;
+}
+
+.invite-result {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
+}
+
+.invite-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  margin-bottom: 8px;
+}
+
+/* The one line to send. It wraps rather than scrolling: a command that is cut
+   off at the edge of a box is a command somebody pastes half of. */
+.invite-command {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.invite-result p {
+  font-size: 12px;
+}
+
+.invite-open {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.invite-open h3 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  margin-bottom: 8px;
+}
+
+.invite-open ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.invite-open li {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+
+/* "Remember me", under the token field. */
+.gate-remember {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  margin-top: 12px;
+  cursor: pointer;
+}
+
+.gate-remember input {
+  margin-top: 2px;
+  flex: none;
+}
