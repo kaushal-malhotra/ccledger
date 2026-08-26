@@ -15,6 +15,10 @@ keys it owns is a breaking change even when no function signature moves.
 
 First release.
 
+Published as `@thisissbk/ccledger`. The registry refused the unscoped name
+as too close to an unrelated package; the command it installs is plain
+`ccledger`, and nothing else about the project is scoped.
+
 ### Added
 
 - **OTLP ingest.** `POST /v1/logs` accepts OTLP/HTTP JSON log batches from
