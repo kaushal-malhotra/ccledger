@@ -44,6 +44,23 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+# The $5 machine has about 414 MB usable and no swap. Installing a few hundred
+# npm packages is the peak, and it is close enough to the ceiling that a kernel
+# OOM kill part-way through leaves a half-written global install. A gigabyte of
+# swap on a 20 GB disk costs nothing and turns that into a slow moment instead
+# of a broken one.
+say "Swap"
+if [ "$(free -m | awk '/^Swap:/ {print $2}')" -eq 0 ] && [ ! -e /swapfile ]; then
+  fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none
+  chmod 600 /swapfile
+  mkswap /swapfile >/dev/null
+  swapon /swapfile
+  grep -q '^/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' >>/etc/fstab
+  echo "1 GB swapfile added"
+else
+  echo "swap already present, leaving it alone"
+fi
+
 say "Base packages"
 apt-get update -qq
 apt-get install -y -qq ca-certificates curl gnupg apt-transport-https
