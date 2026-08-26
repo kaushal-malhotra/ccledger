@@ -5,6 +5,25 @@
   "description": "Self-hosted Claude Code usage dashboard that ingests OpenTelemetry log events into SQLite.",
   "license": "MIT",
   "author": "Shakib Bin Kabir",
+  "homepage": "https://github.com/shakibbinkabir/ccledger#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shakibbinkabir/ccledger.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shakibbinkabir/ccledger/issues"
+  },
+  "keywords": [
+    "claude-code",
+    "opentelemetry",
+    "otlp",
+    "telemetry",
+    "token-usage",
+    "usage-dashboard",
+    "self-hosted",
+    "sqlite",
+    "cli"
+  ],
   "type": "module",
   "engines": {
     "node": ">=22"
