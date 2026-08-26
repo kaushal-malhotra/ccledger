@@ -1,7 +1,8 @@
 import type { JSX, ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 
-import type { BucketSize, MemberUsage, UsageTotals } from '../../../src/shared/api.js';
+import type { AlertState, BucketSize, MemberUsage, UsageTotals } from '../../../src/shared/api.js';
+import { badgeLabel, badgeTitle } from '../lib/alerts.js';
 import { memberColor } from '../lib/colors.js';
 import { formatCostMicros, formatCount, formatPercent } from '../lib/format.js';
 import { describeTrend } from '../lib/series.js';
@@ -23,6 +24,17 @@ export interface MemberTableProps {
   readonly bucket: BucketSize;
   /** Member id to palette slot, so a row's swatch matches its band. */
   readonly slots: ReadonlyMap<string, number>;
+  /**
+   * Members currently over an alert threshold, keyed by member id.
+   *
+   * Deliberately not scoped to the range this table is showing: an alert is
+   * about the current day or week, and a badge that appeared and disappeared as
+   * someone moved the date picker would be one nobody could act on. The title
+   * on each badge says so.
+   */
+  readonly alerts: ReadonlyMap<string, readonly AlertState[]>;
+  /** The zone alert windows are aligned to, for the badge's tooltip. */
+  readonly timezone: string;
   /** Opens a member's detail page. */
   readonly onSelect: (memberId: string) => void;
 }
@@ -35,6 +47,8 @@ interface Row extends MemberUsage {
   readonly trend: readonly number[];
   /** This member's band colour, as a `var(--series-n)` reference. */
   readonly color: string;
+  /** Alert thresholds this member is currently over. Usually empty. */
+  readonly alerts: readonly AlertState[];
 }
 
 /** One column: how it sorts, how it renders, and what it totals to. */
@@ -53,6 +67,7 @@ interface Column {
 /** What the column factory needs that a row does not carry. */
 interface ColumnContext {
   readonly bucket: BucketSize;
+  readonly timezone: string;
   readonly onSelect: (memberId: string) => void;
 }
 
@@ -122,6 +137,15 @@ function columnsFor(context: ColumnContext): Column[] {
               <span className="badge badge-revoked">revoked</span>
             </>
           )}
+          {row.alerts.map((state) => (
+            <span
+              key={state.rule_id}
+              className="badge badge-alert"
+              title={badgeTitle(state, context.timezone)}
+            >
+              {badgeLabel(state)}
+            </span>
+          ))}
         </span>
       ),
       foot: () => 'Total',
@@ -234,12 +258,17 @@ export function MemberTable({
   trends,
   bucket,
   slots,
+  alerts,
+  timezone,
   onSelect,
 }: MemberTableProps): JSX.Element {
   const [sortKey, setSortKey] = useState<string>(DEFAULT_SORT);
   const [direction, setDirection] = useState<SortDirection>('desc');
 
-  const columns = useMemo(() => columnsFor({ bucket, onSelect }), [bucket, onSelect]);
+  const columns = useMemo(
+    () => columnsFor({ bucket, timezone, onSelect }),
+    [bucket, timezone, onSelect],
+  );
 
   const rows = useMemo<Row[]>(() => {
     const shares = roundSharesPreservingTotal(members.map((member) => member.share_pct));
@@ -248,8 +277,9 @@ export function MemberTable({
       display_share: shares[index] ?? 0,
       trend: trends.get(member.member_id) ?? [],
       color: memberColor(member.member_id, slots),
+      alerts: alerts.get(member.member_id) ?? [],
     }));
-  }, [members, trends, slots]);
+  }, [members, trends, slots, alerts]);
 
   const shareTotal = useMemo(
     () => Number(rows.reduce((sum, row) => sum + row.display_share, 0).toFixed(6)),

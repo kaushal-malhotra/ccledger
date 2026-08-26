@@ -14,7 +14,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import type { MemberUsage, UsageTotals } from '../../../src/shared/api.js';
+import type { AlertState, MemberUsage, UsageTotals } from '../../../src/shared/api.js';
 import { assignSlots, memberColor } from '../lib/colors.js';
 
 import { MemberTable } from './MemberTable.js';
@@ -64,6 +64,7 @@ function renderWith(
     readonly loading?: boolean;
     readonly trends?: ReadonlyMap<string, number[]>;
     readonly slots?: ReadonlyMap<string, number>;
+    readonly alerts?: ReadonlyMap<string, readonly AlertState[]>;
   } = {},
 ): string {
   return renderToStaticMarkup(
@@ -74,9 +75,27 @@ function renderWith(
       trends={options.trends ?? new Map()}
       bucket="day"
       slots={options.slots ?? new Map()}
+      alerts={options.alerts ?? new Map()}
+      timezone="UTC"
       onSelect={() => undefined}
     />,
   );
+}
+
+/** An alert state a member row would badge, with only the fields it reads. */
+function alertState(overrides: Partial<AlertState> & Pick<AlertState, 'member_id'>): AlertState {
+  return {
+    rule_id: 'ar_1',
+    member_name: overrides.member_id,
+    metric: 'share_pct',
+    window: 'week',
+    threshold: 50,
+    value: 60,
+    window_start: 0,
+    window_end: 1,
+    fired: false,
+    ...overrides,
+  };
 }
 
 /** Three members whose true shares are thirds — the case rounding breaks. */
@@ -234,5 +253,44 @@ describe('MemberTable', () => {
   it('makes each member name a control that opens their page', () => {
     const markup = renderWith(THIRDS);
     expect(markup).toContain('class="link-button member-name"');
+  });
+});
+
+describe('the over-threshold badge', () => {
+  it('appears on the row of a member currently over a rule', () => {
+    const html = renderWith(THIRDS, {
+      alerts: new Map([['m_a', [alertState({ member_id: 'm_a', member_name: 'Alice' })]]]),
+    });
+    expect(html).toContain('badge-alert');
+    expect(html).toContain('over 50.0%');
+    // The tooltip is where the whole sentence, and the window it is about, go.
+    expect(html).toContain('not the range shown above');
+  });
+
+  it('appears on no row when nobody is over anything', () => {
+    expect(renderWith(THIRDS)).not.toContain('badge-alert');
+  });
+
+  it('badges a member once per rule they are over', () => {
+    const html = renderWith(THIRDS, {
+      alerts: new Map([
+        [
+          'm_a',
+          [
+            alertState({ member_id: 'm_a', member_name: 'Alice', rule_id: 'ar_1' }),
+            alertState({
+              member_id: 'm_a',
+              member_name: 'Alice',
+              rule_id: 'ar_2',
+              metric: 'tokens',
+              threshold: 900,
+              window: 'day',
+            }),
+          ],
+        ],
+      ]),
+    });
+    expect(html.match(/badge-alert/g)).toHaveLength(2);
+    expect(html).toContain('over 900');
   });
 });

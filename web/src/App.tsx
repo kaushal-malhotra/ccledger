@@ -2,6 +2,9 @@ import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type {
+  AlertRuleBody,
+  AlertState,
+  AlertsResponse,
   MemberDetailResponse,
   MemberListEntry,
   ModelsResponse,
@@ -10,6 +13,9 @@ import type {
 } from '../../src/shared/api.js';
 
 import {
+  createAlertRule,
+  deleteAlertRule,
+  fetchAlerts,
   fetchHealth,
   fetchMemberDetail,
   fetchMembers,
@@ -19,7 +25,9 @@ import {
   isAuthFailure,
   messageOf,
   revokeMember as postRevoke,
+  updateAlertRule,
 } from './api.js';
+import { AlertsView } from './components/AlertsView.js';
 import { EmptyState } from './components/EmptyState.js';
 import type { EmptyKind } from './components/EmptyState.js';
 import { MemberDetail } from './components/MemberDetail.js';
@@ -30,6 +38,7 @@ import { StatTiles } from './components/StatTiles.js';
 import { TokenGate } from './components/TokenGate.js';
 import { TokensOverTime } from './components/TokensOverTime.js';
 import { Toolbar } from './components/Toolbar.js';
+import { activeByMember } from './lib/alerts.js';
 import { assignSlots } from './lib/colors.js';
 import type { SourceSelection } from './lib/filter.js';
 import { ALL_ACTIVITY, isNarrowed, selectionLabel, selectionParams } from './lib/filter.js';
@@ -46,8 +55,8 @@ import {
 import { memberTrends } from './lib/series.js';
 import { tokenFromHash } from './lib/token.js';
 
-/** The two things the shell can show. */
-type View = 'usage' | 'members';
+/** The three things the shell can show. */
+type View = 'usage' | 'members' | 'settings';
 
 /** Days the custom picker opens on, matching the default preset. */
 const DEFAULT_CUSTOM_DAYS = 6;
@@ -57,6 +66,9 @@ const DEFAULT_PRESET: RangePreset = '7d';
 
 /** No trends yet, as a stable identity so memoised children do not rerender. */
 const NO_TRENDS: ReadonlyMap<string, number[]> = new Map();
+
+/** No alert states yet, for the same reason. */
+const NO_ALERTS: ReadonlyMap<string, readonly AlertState[]> = new Map();
 
 /**
  * The dashboard.
@@ -99,6 +111,7 @@ export function App(): JSX.Element {
   const [members, setMembers] = useState<readonly MemberListEntry[] | null>(null);
   const [timeseries, setTimeseries] = useState<TimeseriesResponse | null>(null);
   const [models, setModels] = useState<ModelsResponse | null>(null);
+  const [alerts, setAlerts] = useState<AlertsResponse | null>(null);
   const [detail, setDetail] = useState<MemberDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,6 +156,7 @@ export function App(): JSX.Element {
       setMembers(null);
       setTimeseries(null);
       setModels(null);
+      setAlerts(null);
       setDetail(null);
       setTokenError(messageOf(cause));
       return;
@@ -167,12 +181,17 @@ export function App(): JSX.Element {
         controller.signal,
       ),
       fetchModels(request, token, controller.signal),
+      // Unranged, like `/api/members`: what it answers is about the current day
+      // and week, not about the range the picker is on. It rides along with the
+      // rest so the badge on a row and the numbers beside it come from one load.
+      fetchAlerts(token, controller.signal),
     ])
-      .then(([summaryBody, membersBody, timeseriesBody, modelsBody]) => {
+      .then(([summaryBody, membersBody, timeseriesBody, modelsBody, alertsBody]) => {
         setSummary(summaryBody);
         setMembers(membersBody.members);
         setTimeseries(timeseriesBody);
         setModels(modelsBody);
+        setAlerts(alertsBody);
         setError(null);
       })
       .catch((cause: unknown) => {
@@ -242,6 +261,37 @@ export function App(): JSX.Element {
     [token, handleFailure],
   );
 
+  // All three take the same shape: change the rule, then reload. A local edit
+  // to the rules array would leave `active` — which the server recomputes from
+  // the new rule — describing the old one, and a badge disagreeing with the
+  // rule that raised it is worse than a moment of staleness.
+  const handleCreateRule = useCallback(
+    async (body: AlertRuleBody): Promise<void> => {
+      if (token === null) return;
+      await createAlertRule(body, token);
+      setReloadKey((key) => key + 1);
+    },
+    [token],
+  );
+
+  const handleUpdateRule = useCallback(
+    async (id: string, patch: Partial<AlertRuleBody>): Promise<void> => {
+      if (token === null) return;
+      await updateAlertRule(id, patch, token);
+      setReloadKey((key) => key + 1);
+    },
+    [token],
+  );
+
+  const handleDeleteRule = useCallback(
+    async (id: string): Promise<void> => {
+      if (token === null) return;
+      await deleteAlertRule(id, token);
+      setReloadKey((key) => key + 1);
+    },
+    [token],
+  );
+
   const reporting = useMemo(
     () => summary?.members.filter((member) => member.requests > 0).length ?? 0,
     [summary],
@@ -255,6 +305,11 @@ export function App(): JSX.Element {
   const trends = useMemo(
     () => (timeseries === null ? NO_TRENDS : memberTrends(timeseries)),
     [timeseries],
+  );
+
+  const alertsByMember = useMemo(
+    () => (alerts === null ? NO_ALERTS : activeByMember(alerts.active)),
+    [alerts],
   );
 
   const emptyKind = useMemo<EmptyKind | null>(() => {
@@ -322,6 +377,15 @@ export function App(): JSX.Element {
               >
                 Members
               </button>
+              <button
+                type="button"
+                aria-pressed={view === 'settings' && selected === null}
+                onClick={() => {
+                  chooseView('settings');
+                }}
+              >
+                Settings
+              </button>
             </div>
             <button
               className="btn btn-quiet"
@@ -333,6 +397,7 @@ export function App(): JSX.Element {
                 setMembers(null);
                 setTimeseries(null);
                 setModels(null);
+                setAlerts(null);
                 setDetail(null);
                 setTokenError(null);
               }}
@@ -423,12 +488,14 @@ export function App(): JSX.Element {
                     trends={trends}
                     bucket={timeseries?.bucket ?? 'day'}
                     slots={slots}
+                    alerts={alertsByMember}
+                    timezone={alerts?.timezone ?? 'the server’s timezone'}
                     onSelect={openMember}
                   />
                 )}
               </section>
             </>
-          ) : (
+          ) : view === 'members' ? (
             <section className="section">
               <div className="section-head">
                 <h2>Members</h2>
@@ -455,6 +522,16 @@ export function App(): JSX.Element {
                 />
               )}
             </section>
+          ) : (
+            <AlertsView
+              alerts={alerts}
+              members={members ?? []}
+              loading={loading}
+              now={asOf}
+              onCreate={handleCreateRule}
+              onUpdate={handleUpdateRule}
+              onDelete={handleDeleteRule}
+            />
           )}
         </div>
       </main>

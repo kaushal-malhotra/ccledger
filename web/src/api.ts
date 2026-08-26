@@ -15,6 +15,11 @@
  */
 
 import type {
+  AlertRuleBody,
+  AlertRuleDeleteResponse,
+  AlertRulePatch,
+  AlertRuleResponse,
+  AlertsResponse,
   MemberDetailResponse,
   MembersResponse,
   ModelsResponse,
@@ -167,6 +172,65 @@ export function fetchTimeseries(
   signal?: AbortSignal,
 ): Promise<TimeseriesResponse> {
   return getJson<TimeseriesResponse>('/api/timeseries', { ...request }, token, signal);
+}
+
+/**
+ * A write to `/api`, with the JSON body the route expects.
+ *
+ * Separate from `getJson` rather than a flag on it, because these are the calls
+ * that change something: they are never given an `AbortSignal`, so a rule is
+ * not half-created because a re-render cancelled the request that was making
+ * it.
+ */
+async function sendJson<T>(
+  path: string,
+  method: string,
+  token: string,
+  body?: unknown,
+): Promise<T> {
+  const headers: Record<string, string> = { authorization: `Bearer ${token}` };
+  if (body !== undefined) headers['content-type'] = 'application/json';
+  const response = await fetch(path, {
+    method,
+    headers,
+    credentials: 'omit',
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) throw new ApiError(response.status, await errorMessage(response));
+  return (await response.json()) as T;
+}
+
+/** `GET /api/alerts`: the rules, the recent fires, and who is over right now. */
+export function fetchAlerts(token: string, signal?: AbortSignal): Promise<AlertsResponse> {
+  return getJson<AlertsResponse>('/api/alerts', {}, token, signal);
+}
+
+/** `POST /api/alerts/rules`. */
+export function createAlertRule(body: AlertRuleBody, token: string): Promise<AlertRuleResponse> {
+  return sendJson<AlertRuleResponse>('/api/alerts/rules', 'POST', token, body);
+}
+
+/** `PATCH /api/alerts/rules/:id`. */
+export function updateAlertRule(
+  id: string,
+  patch: AlertRulePatch,
+  token: string,
+): Promise<AlertRuleResponse> {
+  return sendJson<AlertRuleResponse>(
+    `/api/alerts/rules/${encodeURIComponent(id)}`,
+    'PATCH',
+    token,
+    patch,
+  );
+}
+
+/** `DELETE /api/alerts/rules/:id`. Idempotent, like the endpoint behind it. */
+export function deleteAlertRule(id: string, token: string): Promise<AlertRuleDeleteResponse> {
+  return sendJson<AlertRuleDeleteResponse>(
+    `/api/alerts/rules/${encodeURIComponent(id)}`,
+    'DELETE',
+    token,
+  );
 }
 
 /** `POST /api/members/:id/revoke`. Idempotent, like the endpoint behind it. */

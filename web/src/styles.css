@@ -28,6 +28,8 @@
   --danger: #a1392a;
   --danger-wash: rgb(161 57 42 / 10%);
   --ok: #3d7a4d;
+  --warn: #8a5a09;
+  --warn-wash: rgb(138 90 9 / 12%);
 
   /*
    * The categorical palette, one hue per member. Assigned in `lib/colors.ts`
@@ -75,6 +77,8 @@
     --danger: #e0907f;
     --danger-wash: rgb(224 144 127 / 12%);
     --ok: #85bf95;
+    --warn: #d9a441;
+    --warn-wash: rgb(217 164 65 / 14%);
 
     /* Selected for the dark surface, not flipped: every one of these clears
        3:1 against it, which the light steps would not. */
@@ -595,6 +599,17 @@ table.data td.num {
   background: transparent;
 }
 
+/* The over-threshold badge. Warning rather than danger: somebody being over a
+   share threshold is a thing to look at, not a thing that has gone wrong, and
+   it sits in the same row as the `revoked` badge, which has to stay the louder
+   of the two. */
+.badge-alert {
+  color: var(--warn);
+  border-color: var(--warn);
+  background: var(--warn-wash);
+  margin-left: 6px;
+}
+
 abbr.est {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
@@ -1005,6 +1020,66 @@ pre.command {
   font-size: 11.5px;
 }
 
+/* ---------------------------------------------------------------- alerts -- */
+
+/* The rule editor. A grid rather than a row of fields, because the webhook URL
+   needs the whole width and the four short controls do not — and because on a
+   narrow viewport every one of them has to be able to take the full width
+   without the form deciding which of them gets to keep its place. */
+.alert-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 16px;
+  align-items: end;
+  padding: 16px;
+  margin-bottom: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.alert-form .field {
+  min-width: 0;
+}
+
+.alert-form select,
+.alert-form input[type='text'] {
+  width: 100%;
+}
+
+.alert-form .field-wide {
+  grid-column: 1 / -1;
+}
+
+.threshold-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.threshold-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.alert-form-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.alert-hint {
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* A disabled rule is still a rule, and it still has to be readable — this is a
+   half-step back, not the near-invisible treatment `faint` gives. */
+.row-muted td {
+  opacity: 0.6;
+}
+
 /* ------------------------------------------------------------ responsive -- */
 
 @media (max-width: 1080px) {
@@ -1066,5 +1141,10 @@ pre.command {
 
   .detail-head {
     gap: 8px;
+  }
+
+  .alert-form {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
   }
 }
