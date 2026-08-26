@@ -37,7 +37,8 @@ you get per-person attribution across the whole team in one place.
 ## Quick start
 
 **On the machine that will hold the data** — a laptop on the office network, or
-a VPS. Three commands:
+a VPS. Three commands. The package is scoped because npm holds the unscoped
+name for an unrelated project; what it installs is still plain `ccledger`.
 
 ```console
 $ npm install -g @thisissbk/ccledger
@@ -84,10 +85,6 @@ Send them this line:
 
 The code works once and expires in 24 hours.
 ```
-
-The package is scoped — `@thisissbk/ccledger` — because npm holds the
-unscoped name for an unrelated project. The command it installs is plain
-`ccledger`.
 
 The server has to keep running to receive anything. See
 [docs/install.md](docs/install.md) for both deployment modes, including the
@@ -221,6 +218,10 @@ growing. Please open an issue if you see that.
 | [docs/privacy.md](docs/privacy.md)           | What is this sending about me?                                   |
 | [docs/troubleshoot.md](docs/troubleshoot.md) | Why is there no data?                                            |
 | [docs/architecture.md](docs/architecture.md) | I want to contribute. Where does what live?                      |
+
+Released versions are on [npm](https://www.npmjs.com/package/@thisissbk/ccledger)
+and in [Releases](https://github.com/shakibbinkabir/ccledger/releases); what
+changed in each is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
