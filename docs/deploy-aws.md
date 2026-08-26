@@ -197,6 +197,10 @@ The code works once and expires in 24 hours.
 No plain-HTTP warning, because the endpoint is HTTPS. What happens on their
 side is in [setup.md](setup.md).
 
+You will not want to SSH in every time you add someone. The dashboard has the
+same thing under **Members → Invite a teammate**, which is the reason to save
+the admin token somewhere you can find it.
+
 ## Running it
 
 ```console

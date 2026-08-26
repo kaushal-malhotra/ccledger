@@ -174,7 +174,12 @@ Vite + React + Recharts in `web/`, building to `src/server/public`, served by
 `vite build` still has a working ingest server and API, and `/` answers with a
 sentence naming the missing command instead of a 404.
 
-The admin token is entered once and held in memory. Never `localStorage`. The
+The admin token is kept in `sessionStorage` so a reload does not send the admin
+back to the gate, and in `localStorage` only behind an explicit "remember me"
+that is off by default. `Lock` erases both, and so does any 401. What makes
+that defensible is the page's own CSP — `script-src 'self'` with no
+relaxations — so no third-party script exists in the document to read either
+store. The
 `serve` banner puts it in a URL _fragment_, which is never sent to the server,
 so it stays out of access logs and `Referer` headers. The page ships a strict
 CSP: no framing, no script source but itself.

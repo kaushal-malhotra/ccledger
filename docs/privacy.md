@@ -174,8 +174,10 @@ file.
 
 ## Who can see the data
 
-The dashboard is behind an admin token, held in memory by the page and never
-written to `localStorage`. Whoever runs the server has it, and by extension can
+The dashboard is behind an admin token. The page keeps it for the tab so a
+reload does not ask again, and on the device only if the admin ticks "remember
+me"; locking erases both copies. Whoever runs the server has it, and by
+extension can
 see everyone's totals. That is the point of the tool; it is worth being clear
 that it is not anonymous between teammates.
 

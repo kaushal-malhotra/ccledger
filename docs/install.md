@@ -174,6 +174,11 @@ ccledger: this endpoint is plain HTTP — the token it hands out will cross the 
 Send them that `npx` line. What happens on their side is in
 [setup.md](setup.md).
 
+The dashboard does the same thing without a terminal: **Members → Invite a
+teammate** takes a name and gives back the line to send, with a copy button and
+a list of who has been invited and not yet joined. That is usually the easier
+path once the server is somewhere you do not have a shell open.
+
 `ccledger invite` needs the same `--db` as `serve`, and it reads the endpoint
 `serve` recorded, so it can be run in another terminal while the server is up.
 If you invite several people and lose track, the next invite tells you:
