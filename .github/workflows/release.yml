@@ -27,13 +27,13 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Full history, so release notes can reference what came before and
           # GitHub's generated-notes fallback has commits to work from.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           # The floor in `engines`; publishing from the oldest supported
           # runtime is what catches a dependency that quietly needs a newer one.

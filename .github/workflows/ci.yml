@@ -39,12 +39,25 @@ jobs:
         node: [22, 24]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
           cache: npm
+
+      # better-sqlite3 is a native addon and this is the one leg of the matrix
+      # that has to compile it. node-gyp 11.5, which npm ships with on Node 22,
+      # does not recognise Visual Studio 18 — the only toolchain on the current
+      # windows-latest image — and reports finding no compiler at all rather
+      # than a version it cannot use. Node 24 ships a newer node-gyp and is
+      # unaffected, which is why this failure looks like a Node version problem
+      # and is not one. Without this, `npm ci` fails before a single test runs.
+      - name: Use a node-gyp that recognises Visual Studio 18
+        if: runner.os == 'Windows'
+        run: |
+          npm install -g node-gyp@latest
+          npm config set node_gyp "$(npm prefix -g)/node_modules/node-gyp/bin/node-gyp.js"
 
       # `ci`, not `install`: the lockfile decides, and a resolution that drifts
       # between a developer's machine and this one is itself a failure.
@@ -76,9 +89,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
