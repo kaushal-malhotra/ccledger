@@ -301,6 +301,33 @@ describe('GET /health', () => {
   });
 });
 
+describe('GET /version', () => {
+  it('returns 200 and only the version, unauthenticated', async () => {
+    const { app } = freshApp();
+
+    const response = await app.inject({ method: 'GET', url: '/version' });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ version: string }>();
+    // Only the version: this is what an operator polls to tell a finished
+    // deploy from a container still serving the old image, and anything else
+    // in here would be a second thing to keep in step with `/health`.
+    expect(Object.keys(body)).toEqual(['version']);
+    expect(body.version).toBe(packageVersion());
+  });
+
+  it('agrees with /health, which reports the same build', async () => {
+    const { app } = freshApp();
+
+    const [health, version] = await Promise.all([
+      app.inject({ method: 'GET', url: '/health' }),
+      app.inject({ method: 'GET', url: '/version' }),
+    ]);
+
+    expect(version.json<{ version: string }>().version).toBe(health.json<HealthBody>().version);
+  });
+});
+
 describe('POST /v1/logs — accepted bodies', () => {
   it('answers 200 with exactly the OTLP success envelope', async () => {
     const { app } = freshApp();

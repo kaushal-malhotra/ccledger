@@ -30,7 +30,13 @@ import { joinWithCode } from './join.js';
 import { parseOtlpLogsPayload } from './otlp.js';
 import { JSON_CONTENT_TYPE, fail } from './reply.js';
 import { createJoinCodeStore } from '../db/joincodes.js';
-import { ADMIN_API_PREFIX, HEALTH_PATH, JOIN_PATH, LEAVE_PATH } from '../shared/constants.js';
+import {
+  ADMIN_API_PREFIX,
+  HEALTH_PATH,
+  JOIN_PATH,
+  LEAVE_PATH,
+  VERSION_PATH,
+} from '../shared/constants.js';
 import type { JoinRequestBody, LeaveResponseBody } from '../shared/types.js';
 import { VERSION } from '../shared/version.js';
 
@@ -196,6 +202,15 @@ export function buildApp(options: AppOptions): FastifyInstance {
       version: VERSION,
       uptimeSeconds: Math.floor((Date.now() - startedAtMs) / 1000),
     });
+  });
+
+  // Unauthenticated, like `/health`. It discloses a version number to anyone
+  // who can reach the port, which is the trade being made knowingly: an
+  // operator who cannot check which build is running has no way to tell a
+  // finished deploy from a container that silently kept serving the old image,
+  // and the same number is already in `/health` and in the banner.
+  app.get(VERSION_PATH, (_request, reply) => {
+    reply.code(200).send({ version: VERSION });
   });
 
   // Unauthenticated by design: the join code is the credential, and a teammate

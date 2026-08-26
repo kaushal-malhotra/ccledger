@@ -140,6 +140,16 @@ export const OTLP_LOGS_PATH = '/v1/logs';
 export const HEALTH_PATH = '/health';
 
 /**
+ * Unauthenticated build identity, separate from `/health` on purpose. Liveness
+ * and version answer different questions and are read by different things: a
+ * container orchestrator polls the first every few seconds and cares only about
+ * the status code, while an operator checking whether a deploy actually landed
+ * wants the second and should not have to grant themselves the admin token to
+ * see it.
+ */
+export const VERSION_PATH = '/version';
+
+/**
  * `query_source` values for calls Claude Code makes on its own behalf rather
  * than because someone asked for something: naming a session, compacting a
  * transcript. They are real tokens and real cost, so they are stored and
