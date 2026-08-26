@@ -29,6 +29,30 @@
   --danger-wash: rgb(161 57 42 / 10%);
   --ok: #3d7a4d;
 
+  /*
+   * The categorical palette, one hue per member. Assigned in `lib/colors.ts`
+   * from the enrolment list, so a hue means a person rather than a rank.
+   *
+   * These eight are the data-viz reference palette, checked against this
+   * dashboard's own surfaces rather than assumed to travel: worst adjacent
+   * colour-blind separation is 9.1 against a target of 8, and the normal-vision
+   * floor is 19.6 against 15. Three of them — aqua, yellow, magenta — sit under
+   * 3:1 against a white surface, which is what a palette that also has to stay
+   * separable under CVD costs. That is why the legend is never optional and why
+   * every band's number is also in the table: hue is never the only signal.
+   */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+  /* Neutral, and deliberately outside the palette: the folded tail is not a
+     member and must not read as one. */
+  --series-other: #8a8a80;
+
   --radius: 6px;
   --gap: 24px;
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -51,6 +75,18 @@
     --danger: #e0907f;
     --danger-wash: rgb(224 144 127 / 12%);
     --ok: #85bf95;
+
+    /* Selected for the dark surface, not flipped: every one of these clears
+       3:1 against it, which the light steps would not. */
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --series-other: #6f6f68;
   }
 }
 
@@ -709,7 +745,215 @@ pre.command {
   font-size: 13px;
 }
 
+/* ---------------------------------------------------------------- charts -- */
+
+/* The timeseries is the chart people read; the model split is the one they
+   glance at. Three-to-two rather than half-and-half says so. */
+.chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 12px;
+  margin-top: 24px;
+  align-items: start;
+}
+
+.chart-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 16px 18px 14px;
+  min-width: 0;
+}
+
+.chart-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.chart-head h3 {
+  font-size: 14px;
+}
+
+.chart-note {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+/* Sized to include the axis band, so the plot never grows its own scrollbar. */
+.chart-plot {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+/* A refetch keeps the previous render rather than clearing it: replacing a
+   chart someone is reading with a grey box every time the range is nudged is
+   worse than a moment of slightly stale numbers. Only a first load, which has
+   nothing to keep, draws the skeleton. */
+.is-stale {
+  opacity: 0.55;
+  transition: opacity 120ms ease-out;
+}
+
+.chart-skeleton {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+}
+
+.chart-empty p {
+  margin: 0;
+  padding: 0 16px;
+  font-size: 13px;
+  color: var(--ink-faint);
+  text-align: center;
+  max-width: 40ch;
+}
+
+/* Recharts puts the tooltip in a positioned wrapper of its own and focuses the
+   svg for keyboard readers; neither should draw a box of its own. */
+.recharts-tooltip-wrapper {
+  outline: none;
+  z-index: 2;
+}
+
+.recharts-surface:focus,
+.recharts-wrapper:focus {
+  outline: none;
+}
+
+/* The value at the tip of a bar. Ink, never the series colour. */
+.bar-label {
+  fill: var(--ink-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- legend -- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.legend-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-label {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legend-value {
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --------------------------------------------------------------- tooltip -- */
+
+.tip {
+  min-width: 190px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 9px 11px;
+  font-size: 12.5px;
+}
+
+.tip-head {
+  color: var(--ink);
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.tip-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tip-rows li,
+.tip-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 1px 0;
+}
+
+/* A short stroke rather than a filled box: at tooltip density a swatch is more
+   ink than the label it is keying. */
+.tip-key {
+  flex: none;
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.tip-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The value leads: the reader already knows which series they are pointing at
+   and came for the number. */
+.tip-value {
+  color: var(--ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tip-total {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+}
+
+.tip-none {
+  color: var(--ink-faint);
+}
+
 /* ------------------------------------------------------------ responsive -- */
+
+@media (max-width: 1080px) {
+  /* Two charts side by side stop being readable well before the page does:
+     the model names need their axis width and the stack needs its ticks. */
+  .chart-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 
 @media (max-width: 900px) {
   .tiles {
@@ -718,5 +962,49 @@ pre.command {
 
   .wrap {
     padding: 0 18px;
+  }
+}
+
+@media (max-width: 768px) {
+  .wrap {
+    padding: 0 14px;
+  }
+
+  .topbar-inner {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 0;
+  }
+
+  .toolbar {
+    gap: 10px;
+  }
+
+  /* The spacer exists to push the refresh button to the far edge of a wide
+     toolbar. Wrapped onto three lines it only adds an empty row. */
+  .toolbar-spacer {
+    display: none;
+  }
+
+  .tiles {
+    gap: 10px;
+  }
+
+  .tile-value {
+    font-size: 22px;
+  }
+
+  .chart-card {
+    padding: 14px 14px 12px;
+  }
+
+  .section-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .detail-head {
+    gap: 8px;
   }
 }

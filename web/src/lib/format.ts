@@ -11,6 +11,8 @@
  * float before it reaches this function has already lost whatever it lost.
  */
 
+import type { BucketSize } from '../../../src/shared/api.js';
+
 /** Millionths of a dollar in a dollar. */
 const MICROS_PER_DOLLAR = 1_000_000;
 
@@ -51,6 +53,19 @@ const ABSOLUTE = new Intl.DateTimeFormat('en-US', {
 
 /** Local date alone, for a range label. */
 const DATE_ONLY = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium' });
+
+/** Month and day, for a chart axis where the year is in the heading already. */
+const MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+
+/** The hour alone, for an axis of hourly buckets inside one or two days. */
+const HOUR_ONLY = new Intl.DateTimeFormat('en-US', { hour: 'numeric' });
+
+/** Day and hour, for the tooltip over an hourly bucket. */
+const DAY_HOUR = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+});
 
 /** The sentence every cost figure on this dashboard carries. */
 export const COST_DISCLAIMER =
@@ -121,4 +136,21 @@ export function formatRangeLabel(from: number, to: number): string {
   // before `to`. Labelling it with `to` itself would name a day the numbers
   // above it do not include.
   return `${formatDate(from)} – ${formatDate(to - 1)}`;
+}
+
+/**
+ * A bucket start on a chart axis: `2 PM` for hourly buckets, `Aug 24` for
+ * daily. Short on purpose — an axis tick that wraps is an axis tick that
+ * collides with its neighbour.
+ */
+export function formatBucketLabel(ms: number, bucket: BucketSize): string {
+  return bucket === 'hour' ? HOUR_ONLY.format(new Date(ms)) : MONTH_DAY.format(new Date(ms));
+}
+
+/**
+ * A bucket start in a tooltip, where there is room to say which day an hour
+ * belongs to and no neighbouring label to collide with.
+ */
+export function formatBucketFull(ms: number, bucket: BucketSize): string {
+  return bucket === 'hour' ? DAY_HOUR.format(new Date(ms)) : DATE_ONLY.format(new Date(ms));
 }

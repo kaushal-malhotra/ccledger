@@ -1,12 +1,13 @@
 import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { MemberListEntry, SummaryResponse } from '../../src/shared/api.js';
+import type { MemberListEntry, SummaryResponse, TimeseriesResponse } from '../../src/shared/api.js';
 
 import {
   fetchHealth,
   fetchMembers,
   fetchSummary,
+  fetchTimeseries,
   isAuthFailure,
   messageOf,
   revokeMember as postRevoke,
@@ -17,7 +18,9 @@ import { MemberTable } from './components/MemberTable.js';
 import { MembersView } from './components/MembersView.js';
 import { StatTiles } from './components/StatTiles.js';
 import { TokenGate } from './components/TokenGate.js';
+import { TokensOverTime } from './components/TokensOverTime.js';
 import { Toolbar } from './components/Toolbar.js';
+import { assignSlots } from './lib/colors.js';
 import type { SourceSelection } from './lib/filter.js';
 import { ALL_ACTIVITY, isNarrowed, selectionLabel, selectionParams } from './lib/filter.js';
 import { COST_DISCLAIMER, formatRangeLabel } from './lib/format.js';
@@ -28,6 +31,7 @@ import {
   presetRange,
   toDateInputValue,
   toQueryParams,
+  tzOffsetMinutes,
 } from './lib/range.js';
 import { tokenFromHash } from './lib/token.js';
 
@@ -43,7 +47,7 @@ const DEFAULT_PRESET: RangePreset = '7d';
 /**
  * The dashboard.
  *
- * Two decisions are load-bearing and worth finding here rather than deducing.
+ * Three decisions are load-bearing and worth finding here rather than deducing.
  *
  * The admin token lives in this component's state and nowhere else. It is read
  * once out of the URL fragment that `ccledger serve` prints, immediately erased
@@ -53,7 +57,13 @@ const DEFAULT_PRESET: RangePreset = '7d';
  * `/api/members` is fetched alongside every summary even though the usage table
  * does not need it. It is what tells the difference between the two empty
  * dashboards that look identical and mean opposite things: nobody has joined,
- * or people have joined and nothing is arriving.
+ * or people have joined and nothing is arriving. It earns its request a second
+ * time as the source of the colour assignment — being the one list that does
+ * not change with the range is exactly what a stable palette needs.
+ *
+ * The ranged endpoints are fetched together and land together. A page
+ * where the table has updated and the chart above it has not is a page showing
+ * two different ranges without saying so.
  */
 export function App(): JSX.Element {
   const [token, setToken] = useState<string | null>(() => tokenFromHash(window.location.hash));
@@ -72,6 +82,7 @@ export function App(): JSX.Element {
 
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [members, setMembers] = useState<readonly MemberListEntry[] | null>(null);
+  const [timeseries, setTimeseries] = useState<TimeseriesResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,6 +119,18 @@ export function App(): JSX.Element {
     [range, selection],
   );
 
+  const handleFailure = useCallback((cause: unknown): void => {
+    if (isAuthFailure(cause)) {
+      setToken(null);
+      setSummary(null);
+      setMembers(null);
+      setTimeseries(null);
+      setTokenError(messageOf(cause));
+      return;
+    }
+    setError(messageOf(cause));
+  }, []);
+
   useEffect(() => {
     if (token === null || request === undefined) return undefined;
 
@@ -116,23 +139,25 @@ export function App(): JSX.Element {
     Promise.all([
       fetchSummary(request, token, controller.signal),
       fetchMembers(token, controller.signal),
+      // No `bucket`: the server picks hours under three days and days above,
+      // and the response says which it used. Choosing here would put the same
+      // rule in two places and let them drift.
+      fetchTimeseries(
+        { ...request, tz_offset: tzOffsetMinutes(range?.to ?? Date.now()) },
+        token,
+        controller.signal,
+      ),
     ])
-      .then(([summaryBody, membersBody]) => {
+      .then(([summaryBody, membersBody, timeseriesBody]) => {
         setSummary(summaryBody);
         setMembers(membersBody.members);
+        setTimeseries(timeseriesBody);
         setError(null);
       })
       .catch((cause: unknown) => {
         // An aborted request is this effect being superseded, not a failure.
         if (controller.signal.aborted) return;
-        if (isAuthFailure(cause)) {
-          setToken(null);
-          setSummary(null);
-          setMembers(null);
-          setTokenError(messageOf(cause));
-          return;
-        }
-        setError(messageOf(cause));
+        handleFailure(cause);
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -141,7 +166,7 @@ export function App(): JSX.Element {
     return () => {
       controller.abort();
     };
-  }, [token, request, reloadKey]);
+  }, [token, request, reloadKey, range, handleFailure]);
 
   const refresh = useCallback(() => {
     setAsOf(Date.now());
@@ -162,21 +187,21 @@ export function App(): JSX.Element {
         await postRevoke(memberId, token);
         setReloadKey((key) => key + 1);
       } catch (cause) {
-        if (isAuthFailure(cause)) {
-          setToken(null);
-          setTokenError(messageOf(cause));
-          return;
-        }
-        setError(messageOf(cause));
+        handleFailure(cause);
       }
     },
-    [token],
+    [token, handleFailure],
   );
 
   const reporting = useMemo(
     () => summary?.members.filter((member) => member.requests > 0).length ?? 0,
     [summary],
   );
+
+  // Assigned from the enrolment list rather than from whoever is in the range,
+  // so a member keeps their colour when a filter drops them and gets it back
+  // unchanged when it stops.
+  const slots = useMemo(() => assignSlots(members ?? []), [members]);
 
   const emptyKind = useMemo<EmptyKind | null>(() => {
     if (summary === null || members === null) return null;
@@ -239,6 +264,7 @@ export function App(): JSX.Element {
                 setToken(null);
                 setSummary(null);
                 setMembers(null);
+                setTimeseries(null);
                 setTokenError(null);
               }}
             >
@@ -275,6 +301,12 @@ export function App(): JSX.Element {
           {view === 'usage' ? (
             <>
               <StatTiles totals={summary?.totals ?? null} reporting={reporting} />
+
+              {emptyKind !== 'no-members' && (
+                <div className="chart-grid">
+                  <TokensOverTime response={timeseries} slots={slots} loading={loading} />
+                </div>
+              )}
 
               <section className="section">
                 <div className="section-head">
