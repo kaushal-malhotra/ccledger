@@ -1,11 +1,17 @@
 import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { MemberListEntry, SummaryResponse, TimeseriesResponse } from '../../src/shared/api.js';
+import type {
+  MemberListEntry,
+  ModelsResponse,
+  SummaryResponse,
+  TimeseriesResponse,
+} from '../../src/shared/api.js';
 
 import {
   fetchHealth,
   fetchMembers,
+  fetchModels,
   fetchSummary,
   fetchTimeseries,
   isAuthFailure,
@@ -16,6 +22,7 @@ import { EmptyState } from './components/EmptyState.js';
 import type { EmptyKind } from './components/EmptyState.js';
 import { MemberTable } from './components/MemberTable.js';
 import { MembersView } from './components/MembersView.js';
+import { ModelBars } from './components/ModelBars.js';
 import { StatTiles } from './components/StatTiles.js';
 import { TokenGate } from './components/TokenGate.js';
 import { TokensOverTime } from './components/TokensOverTime.js';
@@ -83,6 +90,7 @@ export function App(): JSX.Element {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
   const [members, setMembers] = useState<readonly MemberListEntry[] | null>(null);
   const [timeseries, setTimeseries] = useState<TimeseriesResponse | null>(null);
+  const [models, setModels] = useState<ModelsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,6 +133,7 @@ export function App(): JSX.Element {
       setSummary(null);
       setMembers(null);
       setTimeseries(null);
+      setModels(null);
       setTokenError(messageOf(cause));
       return;
     }
@@ -147,11 +156,13 @@ export function App(): JSX.Element {
         token,
         controller.signal,
       ),
+      fetchModels(request, token, controller.signal),
     ])
-      .then(([summaryBody, membersBody, timeseriesBody]) => {
+      .then(([summaryBody, membersBody, timeseriesBody, modelsBody]) => {
         setSummary(summaryBody);
         setMembers(membersBody.members);
         setTimeseries(timeseriesBody);
+        setModels(modelsBody);
         setError(null);
       })
       .catch((cause: unknown) => {
@@ -265,6 +276,7 @@ export function App(): JSX.Element {
                 setSummary(null);
                 setMembers(null);
                 setTimeseries(null);
+                setModels(null);
                 setTokenError(null);
               }}
             >
@@ -305,6 +317,11 @@ export function App(): JSX.Element {
               {emptyKind !== 'no-members' && (
                 <div className="chart-grid">
                   <TokensOverTime response={timeseries} slots={slots} loading={loading} />
+                  <ModelBars
+                    models={models?.models ?? null}
+                    totalTokens={models?.totals.total_tokens ?? 0}
+                    loading={loading}
+                  />
                 </div>
               )}
 
