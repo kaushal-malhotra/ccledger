@@ -25,6 +25,8 @@ import type { ServerMode } from '../shared/types.js';
 import { VERSION } from '../shared/version.js';
 import { openMigratedDatabase } from './database.js';
 import { errnoCodeOf, fail, messageOf, say, warn } from './io.js';
+import type { Advertisement } from './mdns.js';
+import { MDNS_HOSTNAME, advertise } from './mdns.js';
 
 /** Claude Code's own OTLP/HTTP default, so a teammate's endpoint can stay short. */
 export const DEFAULT_PORT = 4318;
@@ -118,30 +120,39 @@ export function shortHostname(machineName: string = hostname()): string {
 }
 
 /**
- * The mDNS name this machine answers to. Most operating systems publish their
- * own hostname over mDNS, so `<hostname>.local` resolves on a LAN today —
- * unlike the `ccledger.local` alias, which needs an advertisement of our own.
+ * The base URL an explicit `--public-url` asks for, normalised, or `undefined`
+ * when the flag was not passed — and also when it was passed something that is
+ * not an absolute http(s) URL, which the caller reports rather than guessing at.
+ *
+ * An explicit flag always wins, in both modes. VPS mode has nothing else: the
+ * server sits behind a proxy that knows the domain and it does not, and an
+ * invite carrying a container's own address is an invite that cannot work.
  */
-export function mdnsHost(machineName: string = hostname()): string {
-  const name = shortHostname(machineName);
-  return name === 'localhost' ? name : `${name}.local`;
+export function explicitPublicUrl(raw: string | undefined): string | undefined {
+  if (raw === undefined) return undefined;
+  return normaliseEndpoint(raw);
 }
 
 /**
- * The base URL to hand teammates. An explicit `--public-url` always wins. In
- * laptop mode the mDNS name is guessed, because a guess that is usually right
- * beats making every admin discover a flag. In VPS mode nothing is guessed:
- * the server sits behind a proxy that knows the domain and it does not, and an
- * invite carrying a container's own address is an invite that cannot work.
+ * The base URL laptop mode hands teammates when no `--public-url` was given.
+ *
+ * The advertised mDNS name first, because it survives the server changing
+ * address. A LAN address second, but only when there is exactly one, and that
+ * restraint is the point: a developer machine usually has WSL, Docker or
+ * Hyper-V adapters alongside the real network, and `172.19.144.1` is as likely
+ * to come first as the address teammates can actually reach. Guessing wrong
+ * there does not fail loudly — it mints invites that every teammate accepts and
+ * none of them can deliver to. So where the answer is ambiguous this returns
+ * `undefined` and the banner asks for `--public-url`, listing the candidates.
  */
-export function resolvePublicUrl(options: {
-  readonly mode: ServerMode;
-  readonly publicUrl?: string;
-  readonly port: number;
-}): string | undefined {
-  if (options.publicUrl !== undefined) return normaliseEndpoint(options.publicUrl);
-  if (options.mode === 'vps') return undefined;
-  return `http://${mdnsHost()}:${String(options.port)}`;
+export function laptopPublicUrl(
+  advertisedHost: string | undefined,
+  port: number,
+  addresses: readonly string[] = lanAddresses(),
+): string | undefined {
+  if (advertisedHost !== undefined) return `http://${advertisedHost}:${String(port)}`;
+  if (addresses.length !== 1) return undefined;
+  return `http://${String(addresses[0])}:${String(port)}`;
 }
 
 /** Fastify's log level, from `CCLEDGER_LOG_LEVEL`, falling back to `info`. */
@@ -188,6 +199,8 @@ interface BannerOptions {
   readonly advertised: string | undefined;
   /** True when `advertised` is left over from a previous run rather than this one. */
   readonly advertisedIsStored: boolean;
+  /** The mDNS name this boot published, or `undefined` if it could not publish. */
+  readonly mdnsHost: string | undefined;
   readonly databasePath: string;
   readonly port: number;
   /** The zone alert windows reset on. */
@@ -210,11 +223,35 @@ function printBanner(options: BannerOptions): void {
   say();
 
   if (options.mode === 'laptop') {
-    say(`  Teammates on this network reach ccledger at ${endpointBase}`);
-    const addresses = lanAddresses();
-    if (addresses.length > 0) {
-      const list = addresses.map((address) => `http://${address}:${String(options.port)}`);
-      say(`  If that name does not resolve for them, try ${list.join('  or  ')}`);
+    if (options.mdnsHost !== undefined) {
+      say(`  Advertised over mDNS as ${options.mdnsHost} — teammates need no setup for it.`);
+    } else {
+      // Said plainly, because the symptom otherwise is a teammate reporting
+      // that a hostname the admin never saw fail does not resolve.
+      say(`  mDNS is not available here, so ${MDNS_HOSTNAME} was not advertised.`);
+    }
+    const candidates = lanAddresses().map((address) => `http://${address}:${String(options.port)}`);
+    if (options.advertised !== undefined) {
+      say(`  Teammates on this network reach ccledger at ${endpointBase}`);
+      const alternatives = candidates.filter((url) => url !== endpointBase);
+      if (alternatives.length > 0) {
+        say(`  If that does not reach them, try ${alternatives.join('  or  ')}`);
+      }
+    } else if (candidates.length === 0) {
+      say('  This machine is on no network ccledger can see, so there is no address');
+      say('  to give a teammate. Connect to a network and restart, or pass');
+      say('  --public-url if you are reachable by some route this cannot detect.');
+    } else {
+      // Several addresses and no way to tell which one teammates share a
+      // network with. Choosing would mint invites that fail silently, so this
+      // asks rather than guesses.
+      say('  This machine has more than one address and ccledger cannot tell which of');
+      say('  them teammates can reach, so invites carry none of them. Restart with the');
+      say('  one that is on their network:');
+      say();
+      for (const candidate of candidates) {
+        say(`      ccledger serve --public-url ${candidate}`);
+      }
     }
     say();
     say('  WARNING  laptop mode serves plain HTTP. Tokens and telemetry cross the');
@@ -266,8 +303,8 @@ function printAdminToken(token: string, localUrl: string, rotated: boolean): voi
 export async function runServe(options: ServeOptions): Promise<void> {
   // Validated before anything binds or is written: a typo in a URL should cost
   // one line of output, not a half-configured server.
-  const publicUrl = resolvePublicUrl(options);
-  if (options.publicUrl !== undefined && publicUrl === undefined) {
+  const explicit = explicitPublicUrl(options.publicUrl);
+  if (options.publicUrl !== undefined && explicit === undefined) {
     fail(`--public-url is not an absolute http(s) URL: ${options.publicUrl}`);
   }
   const serverName = options.name === undefined ? undefined : normaliseDisplayName(options.name);
@@ -285,6 +322,11 @@ export async function runServe(options: ServeOptions): Promise<void> {
   const db: Database.Database = openMigratedDatabase(options.db);
   const app: FastifyInstance = buildApp({ db, logger: { level: resolveLogLevel() } });
 
+  // Assigned after `listen`, but the shutdown handler below closes over it and
+  // is installed first, so a Ctrl+C during the advertisement still tears down
+  // whatever exists by then.
+  let advertisement: Advertisement | undefined;
+
   let closing = false;
   const shutdown = (signal: string): void => {
     // Two Ctrl+Cs in a row must not race two closes against the same handle.
@@ -292,8 +334,10 @@ export async function runServe(options: ServeOptions): Promise<void> {
     closing = true;
     say();
     warn(`${signal} received, shutting down`);
-    void app
-      .close()
+    // Goodbye packets before the socket goes away, so teammates' resolvers stop
+    // handing out a name that no longer answers. `stop` never rejects.
+    void (advertisement?.stop() ?? Promise.resolve())
+      .then(() => app.close())
       .catch((error: unknown) => {
         warn(`error closing server: ${messageOf(error)}`);
       })
@@ -326,8 +370,23 @@ export async function runServe(options: ServeOptions): Promise<void> {
     fail(`could not listen on ${options.host}:${String(options.port)}: ${messageOf(error)}`);
   }
 
-  // Only once the socket is ours. An admin token issued before a failed bind
-  // would be stored, never printed, and recoverable only by rotating it.
+  // Only once the socket is ours, for the same reason the admin token is only
+  // issued below: advertising a port that failed to bind would point every
+  // teammate on the network at nothing.
+  //
+  // Skipped when `--public-url` was given, because the operator has already
+  // said where teammates should look and a second, different name would only
+  // make the invite ambiguous. Skipped in VPS mode because multicast does not
+  // leave the container it would be published from.
+  if (options.mode === 'laptop' && explicit === undefined) {
+    advertisement = await advertise({ port: options.port });
+  }
+
+  const publicUrl =
+    options.mode === 'laptop' && explicit === undefined
+      ? laptopPublicUrl(advertisement?.host, options.port)
+      : explicit;
+
   const now = Date.now();
   if (serverName !== undefined) {
     setConfig(db, CONFIG_SERVER_NAME, serverName, now);
@@ -361,6 +420,7 @@ export async function runServe(options: ServeOptions): Promise<void> {
     localUrl,
     advertised,
     advertisedIsStored: publicUrl === undefined && storedPublicUrl !== undefined,
+    mdnsHost: advertisement?.host,
     databasePath,
     port: options.port,
     timezone: zone.timezone,

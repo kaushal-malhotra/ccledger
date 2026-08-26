@@ -13,7 +13,14 @@ import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildProgram } from './index.js';
-import { baseUrl, lanAddresses, mdnsHost, resolvePublicUrl, shortHostname } from './serve.js';
+import {
+  baseUrl,
+  explicitPublicUrl,
+  lanAddresses,
+  laptopPublicUrl,
+  shortHostname,
+} from './serve.js';
+import { MDNS_HOSTNAME } from './mdns.js';
 import { VERSION } from '../shared/version.js';
 
 const tempPaths: string[] = [];
@@ -227,21 +234,27 @@ describe('the URLs serve prints', () => {
     expect(baseUrl('fe80::1', 4318)).toBe('http://[fe80::1]:4318');
   });
 
-  it('derives an mDNS name from the short machine name only', () => {
+  it('reduces the machine name to its short form for the server label', () => {
     expect(shortHostname('Desk-01')).toBe('desk-01');
     expect(shortHostname('desk-01.corp.example.com')).toBe('desk-01');
     expect(shortHostname('  ')).toBe('localhost');
-    expect(mdnsHost('Desk-01')).toBe('desk-01.local');
-    expect(mdnsHost('desk-01.corp.example.com')).toBe('desk-01.local');
-    // Nothing gains a `.local` it would not answer to.
-    expect(mdnsHost('')).toBe('localhost');
   });
 
-  it('guesses an mDNS URL in laptop mode and refuses to guess in VPS mode', () => {
-    expect(resolvePublicUrl({ mode: 'laptop', port: 4318 })).toBe(`http://${mdnsHost()}:4318`);
-    // Behind a proxy the process cannot know its own public name, and an invite
-    // carrying a container's own address is an invite that cannot work.
-    expect(resolvePublicUrl({ mode: 'vps', port: 4318 })).toBeUndefined();
+  it('advertises the mDNS name when it published and a LAN address when it did not', () => {
+    // The mDNS name wins even where an address would also do: it survives the
+    // laptop moving to a different network, and the invite carrying it does too.
+    expect(laptopPublicUrl(MDNS_HOSTNAME, 4318, ['192.168.1.20', '10.0.0.4'])).toBe(
+      'http://ccledger.local:4318',
+    );
+    // Without mDNS, one unambiguous address is the fallback.
+    expect(laptopPublicUrl(undefined, 4318, ['192.168.1.20'])).toBe('http://192.168.1.20:4318');
+    // Two addresses and no way to tell which one teammates share a network
+    // with. A wrong guess here mints invites that fail silently on delivery, so
+    // the banner asks for --public-url instead.
+    expect(laptopPublicUrl(undefined, 4318, ['172.19.144.1', '192.168.1.20'])).toBeUndefined();
+    // On no network at all there is nothing to tell a teammate, and `localhost`
+    // would send every one of them to their own machine.
+    expect(laptopPublicUrl(undefined, 4318, [])).toBeUndefined();
   });
 
   it('offers every real address rather than picking one that may be virtual', () => {
@@ -256,10 +269,12 @@ describe('the URLs serve prints', () => {
     expect(new Set(addresses).size).toBe(addresses.length);
   });
 
-  it('prefers an explicit public URL and normalises it', () => {
-    expect(
-      resolvePublicUrl({ mode: 'laptop', port: 4318, publicUrl: 'https://meter.example.com/' }),
-    ).toBe('https://meter.example.com');
-    expect(resolvePublicUrl({ mode: 'vps', port: 4318, publicUrl: 'not a url' })).toBeUndefined();
+  it('normalises an explicit public URL and rejects one that is not a URL', () => {
+    expect(explicitPublicUrl('https://meter.example.com/')).toBe('https://meter.example.com');
+    // Reported by the caller as a usage error rather than guessed at. Behind a
+    // proxy the process cannot know its own public name, so VPS mode has
+    // nothing else to fall back to.
+    expect(explicitPublicUrl('not a url')).toBeUndefined();
+    expect(explicitPublicUrl(undefined)).toBeUndefined();
   });
 });
