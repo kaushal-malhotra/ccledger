@@ -1,5 +1,6 @@
 /**
- * The read API: six routes that turn a date range into numbers.
+ * The read API: the routes that turn a date range into numbers, plus the alert
+ * routes registered from `alertroutes.ts` onto the same guarded scope.
  *
  * Everything here is guarded, but not by anything in this file. `buildApp`
  * installs one `onRequest` hook over the whole `/api` prefix, so a route added
@@ -27,6 +28,7 @@
 import type Database from 'better-sqlite3';
 import type { FastifyInstance } from 'fastify';
 
+import { registerAlertRoutes } from './alertroutes.js';
 import { findMember, revokeMember } from './auth.js';
 import { JSON_CONTENT_TYPE, fail } from './reply.js';
 import {
@@ -243,6 +245,10 @@ function pickTotals(row: UsageTotals): UsageTotals {
  * installed again.
  */
 export function registerApiRoutes(app: FastifyInstance, db: Database.Database): void {
+  // Same scope, same guard. Alerting is enough routes to be its own file and
+  // not enough to be its own prefix.
+  registerAlertRoutes(app, db);
+
   app.get<{ Querystring: RangeQuery }>(
     `${ADMIN_API_PREFIX}/summary`,
     { schema: { querystring: RANGE_QUERY_SCHEMA } },
