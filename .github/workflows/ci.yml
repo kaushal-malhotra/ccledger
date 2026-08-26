@@ -53,11 +53,16 @@ jobs:
       # than a version it cannot use. Node 24 ships a newer node-gyp and is
       # unaffected, which is why this failure looks like a Node version problem
       # and is not one. Without this, `npm ci` fails before a single test runs.
+      #
+      # The path goes into the environment rather than through `npm config
+      # set`, which rejects this key outright as not a valid option. npm reads
+      # it as `npm_config_node_gyp` when it spawns gyp for an install script.
       - name: Use a node-gyp that recognises Visual Studio 18
         if: runner.os == 'Windows'
         run: |
           npm install -g node-gyp@latest
-          npm config set node_gyp "$(npm prefix -g)/node_modules/node-gyp/bin/node-gyp.js"
+          $gyp = "$(npm prefix -g)/node_modules/node-gyp/bin/node-gyp.js"
+          Add-Content -Path $env:GITHUB_ENV -Value "npm_config_node_gyp=$gyp"
 
       # `ci`, not `install`: the lockfile decides, and a resolution that drifts
       # between a developer's machine and this one is itself a failure.
