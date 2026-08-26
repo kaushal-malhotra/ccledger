@@ -11,6 +11,54 @@ keys it owns is a breaking change even when no function signature moves.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-26
+
+Server-side only. Teammates need to change nothing and are not interrupted:
+the config contract, the member tokens and the ingest path are all untouched,
+so an upgrade is `npm install -g @thisissbk/ccledger@latest` and a restart of
+the server alone.
+
+### Added
+
+- **Invitations from the dashboard.** Members → Invite a teammate takes a name
+  and gives back the whole line to send, with a copy button, plus a list of who
+  has been invited and has not joined yet. `ccledger invite` still works and is
+  unchanged; this exists because the person adding teammates and the person
+  with a shell on the server stop being the same once the server is not a
+  laptop.
+
+  The command is assembled on the server, not in the browser, so the package
+  name in it comes from the manifest this build was published under. A wrong
+  version in that line is cosmetic; a wrong package name installs somebody
+  else's software.
+
+  New routes: `POST /api/invites` and `GET /api/invites`, behind the admin
+  token like everything else under `/api`. A server with no public URL recorded
+  answers 409 and names the flag that fixes it, rather than minting an
+  invitation that points nowhere.
+
+### Changed
+
+- **The dashboard no longer forgets the admin token on reload.** It is kept in
+  `sessionStorage` for the tab, and in `localStorage` only behind an explicit
+  "remember me on this device" that is off by default. `Lock` erases both, and
+  so does any rejected token.
+
+  This reverses a decision 0.1.0 made deliberately, and the reason is that it
+  was wrong in practice rather than in principle: the token is thirty-six
+  characters nobody memorises, so "never at rest" meant everybody kept it at
+  rest somewhere else and pasted it in several times a day. What makes the
+  trade defensible is the page's own CSP — `script-src 'self'` with no
+  relaxations — so there is no third-party script in the document to read
+  either store.
+
+### Fixed
+
+- An unclaimed invitation showed "expires just now" whatever its expiry.
+  `formatRelative` measures elapsed time and folds every negative value to
+  "just now", which is exactly backwards for a countdown. Expiries now use
+  `formatUntil` and read "in 23h".
+
 ## [0.1.1] - 2026-08-26
 
 ### Added
@@ -109,6 +157,7 @@ as too close to an unrelated package; the command it installs is plain
 - Tested against Claude Code 2.1.241. Telemetry attribute names are not a
   stable API.
 
-[unreleased]: https://github.com/shakibbinkabir/ccledger/compare/v0.1.1...HEAD
+[unreleased]: https://github.com/shakibbinkabir/ccledger/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/shakibbinkabir/ccledger/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/shakibbinkabir/ccledger/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/shakibbinkabir/ccledger/releases/tag/v0.1.0
