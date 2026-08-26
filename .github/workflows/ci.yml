@@ -32,7 +32,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        node: [20, 22]
+        # 22 is the floor `engines` declares and 24 is the current LTS. Not 20:
+        # better-sqlite3 requires >=22 and does not merely warn about it — the
+        # addon segfaults on opening a database — and Node 20 left support in
+        # April 2026.
+        node: [22, 24]
 
     steps:
       - uses: actions/checkout@v4
@@ -76,7 +80,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - run: npm ci

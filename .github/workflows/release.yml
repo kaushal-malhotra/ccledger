@@ -35,7 +35,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # The floor in `engines`; publishing from the oldest supported
+          # runtime is what catches a dependency that quietly needs a newer one.
+          node-version: 22
           cache: npm
           # Points npm at the public registry and writes the .npmrc that
           # NODE_AUTH_TOKEN below is read through.

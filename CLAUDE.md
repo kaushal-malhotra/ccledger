@@ -16,7 +16,7 @@ implementing it.
 
 ## Stack
 
-- TypeScript, Node 20+
+- TypeScript, Node 22+
 - Fastify (HTTP server: OTLP ingest, API, static dashboard)
 - better-sqlite3 (synchronous, single-file storage)
 - Commander (CLI)

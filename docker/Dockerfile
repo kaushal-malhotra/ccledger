@@ -6,12 +6,18 @@
 # of attack surface with no business being on a server that answers HTTP. The
 # builder keeps them, the runtime copies out only the compiled result.
 #
+# Node 22, not 20. better-sqlite3 declares `engines: >=22` and commander
+# `>=22.12.0`, and the first of those is not advisory: on Node 20 the addon
+# loads and then segfaults the moment a database is opened, on musl and glibc
+# alike, so a Node 20 image starts and dies before it logs anything. Node 20
+# also left support in April 2026.
+#
 # Nothing here terminates TLS. `docker-compose.yml` puts Caddy in front, which
 # is what obtains and renews the certificate; this container listens on plain
 # HTTP and is never published to the host.
 
 # --- build -------------------------------------------------------------------
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 # node-gyp's toolchain. Only ever present in this stage.
 RUN apk add --no-cache python3 make g++
@@ -35,7 +41,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # --- runtime -----------------------------------------------------------------
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 
 # `alert reset` windows are calendar-aligned, so the zone has to be a real one.
 # Node's ICU would answer for Intl alone, but a container whose `date` disagrees

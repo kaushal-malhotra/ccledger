@@ -31,10 +31,11 @@ const SOURCE_DIR = join(ROOT, 'src');
 const OUT_DIR = join(ROOT, 'dist');
 
 /**
- * Node 20 is the floor in `engines`, so the output may not use syntax newer
- * than it understands.
+ * The floor in `engines`, so the output may not use syntax newer than it
+ * understands. Node 22 rather than 20 because better-sqlite3 and commander
+ * both require it — see the note in `docker/Dockerfile`.
  */
-const TARGET = 'node20';
+const TARGET = 'node22';
 
 /**
  * Colocated tests, which `tsconfig.build.json` also excludes. They import
