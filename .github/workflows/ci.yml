@@ -46,23 +46,22 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
 
-      # better-sqlite3 is a native addon and this is the one leg of the matrix
-      # that has to compile it. node-gyp 11.5, which npm ships with on Node 22,
-      # does not recognise Visual Studio 18 — the only toolchain on the current
-      # windows-latest image — and reports finding no compiler at all rather
-      # than a version it cannot use. Node 24 ships a newer node-gyp and is
-      # unaffected, which is why this failure looks like a Node version problem
-      # and is not one. Without this, `npm ci` fails before a single test runs.
+      # better-sqlite3 is a native addon and Windows is the one leg of the
+      # matrix that compiles it. The node-gyp npm ships with on Node 22 —
+      # 11.5.0 — cannot identify Visual Studio 18, the only toolchain on the
+      # current windows-latest image: its PowerShell probe overruns the child
+      # process buffer, and the path scan it falls back to reports "unknown
+      # version undefined". It then concludes there is no compiler at all and
+      # `npm ci` fails before a single test runs.
       #
-      # The path goes into the environment rather than through `npm config
-      # set`, which rejects this key outright as not a valid option. npm reads
-      # it as `npm_config_node_gyp` when it spawns gyp for an install script.
-      - name: Use a node-gyp that recognises Visual Studio 18
+      # Node 24 passes on the same image because the npm it ships with carries
+      # a newer node-gyp, so this brings Node 22 up to the same one. Installing
+      # node-gyp separately does not work: npm resolves its own bundled copy
+      # and ignores both `npm config set node_gyp`, which it rejects as an
+      # invalid option, and the `npm_config_node_gyp` environment variable.
+      - name: Update npm, whose node-gyp has to recognise Visual Studio 18
         if: runner.os == 'Windows'
-        run: |
-          npm install -g node-gyp@latest
-          $gyp = "$(npm prefix -g)/node_modules/node-gyp/bin/node-gyp.js"
-          Add-Content -Path $env:GITHUB_ENV -Value "npm_config_node_gyp=$gyp"
+        run: npm install -g npm@latest
 
       # `ci`, not `install`: the lockfile decides, and a resolution that drifts
       # between a developer's machine and this one is itself a failure.
