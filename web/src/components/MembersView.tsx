@@ -12,6 +12,8 @@ export interface MembersViewProps {
   /** The instant relative times are measured from. */
   readonly now: number;
   readonly loading: boolean;
+  /** Opens a member's detail page. */
+  readonly onSelect: (memberId: string) => void;
 }
 
 /**
@@ -27,7 +29,13 @@ export interface MembersViewProps {
  * and a confirmation that appears where the button was is harder to dismiss by
  * reflex than a modal.
  */
-export function MembersView({ members, onRevoke, now, loading }: MembersViewProps): JSX.Element {
+export function MembersView({
+  members,
+  onRevoke,
+  now,
+  loading,
+  onSelect,
+}: MembersViewProps): JSX.Element {
   const [confirming, setConfirming] = useState<string | null>(null);
   const [working, setWorking] = useState<string | null>(null);
 
@@ -84,10 +92,16 @@ export function MembersView({ members, onRevoke, now, loading }: MembersViewProp
           {members.map((member) => (
             <tr key={member.member_id}>
               <td>
-                <span className="member-name">{member.display_name}</span>
-                <div className="faint mono" style={{ fontSize: '11.5px' }}>
-                  {member.member_id}
-                </div>
+                <button
+                  type="button"
+                  className="link-button member-name"
+                  onClick={() => {
+                    onSelect(member.member_id);
+                  }}
+                >
+                  {member.display_name}
+                </button>
+                <div className="faint mono detail-sub">{member.member_id}</div>
               </td>
               <td>
                 {member.revoked_at === null ? (

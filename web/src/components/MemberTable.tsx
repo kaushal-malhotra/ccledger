@@ -23,6 +23,8 @@ export interface MemberTableProps {
   readonly bucket: BucketSize;
   /** Member id to palette slot, so a row's swatch matches its band. */
   readonly slots: ReadonlyMap<string, number>;
+  /** Opens a member's detail page. */
+  readonly onSelect: (memberId: string) => void;
 }
 
 /** A member row with the share the table will actually print. */
@@ -51,6 +53,7 @@ interface Column {
 /** What the column factory needs that a row does not carry. */
 interface ColumnContext {
   readonly bucket: BucketSize;
+  readonly onSelect: (memberId: string) => void;
 }
 
 /** Rows drawn while the first response is still in flight. */
@@ -104,7 +107,15 @@ function columnsFor(context: ColumnContext): Column[] {
               table doubles as a second legend and a reader can get from a
               ribbon to its numbers without holding a hue in their head. */}
           <span className="legend-swatch" style={{ background: row.color }} aria-hidden="true" />
-          <span className="member-name">{row.display_name}</span>
+          <button
+            type="button"
+            className="link-button member-name"
+            onClick={() => {
+              context.onSelect(row.member_id);
+            }}
+          >
+            {row.display_name}
+          </button>
           {row.revoked_at !== null && (
             <>
               {' '}
@@ -223,11 +234,12 @@ export function MemberTable({
   trends,
   bucket,
   slots,
+  onSelect,
 }: MemberTableProps): JSX.Element {
   const [sortKey, setSortKey] = useState<string>(DEFAULT_SORT);
   const [direction, setDirection] = useState<SortDirection>('desc');
 
-  const columns = useMemo(() => columnsFor({ bucket }), [bucket]);
+  const columns = useMemo(() => columnsFor({ bucket, onSelect }), [bucket, onSelect]);
 
   const rows = useMemo<Row[]>(() => {
     const shares = roundSharesPreservingTotal(members.map((member) => member.share_pct));

@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type {
+  MemberDetailResponse,
   MemberListEntry,
   ModelsResponse,
   SummaryResponse,
@@ -10,6 +11,7 @@ import type {
 
 import {
   fetchHealth,
+  fetchMemberDetail,
   fetchMembers,
   fetchModels,
   fetchSummary,
@@ -20,6 +22,7 @@ import {
 } from './api.js';
 import { EmptyState } from './components/EmptyState.js';
 import type { EmptyKind } from './components/EmptyState.js';
+import { MemberDetail } from './components/MemberDetail.js';
 import { MemberTable } from './components/MemberTable.js';
 import { MembersView } from './components/MembersView.js';
 import { ModelBars } from './components/ModelBars.js';
@@ -72,7 +75,7 @@ const NO_TRENDS: ReadonlyMap<string, number[]> = new Map();
  * time as the source of the colour assignment — being the one list that does
  * not change with the range is exactly what a stable palette needs.
  *
- * The ranged endpoints are fetched together and land together. A page
+ * The four ranged endpoints are fetched together and land together. A page
  * where the table has updated and the chart above it has not is a page showing
  * two different ranges without saying so.
  */
@@ -81,6 +84,7 @@ export function App(): JSX.Element {
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [version, setVersion] = useState<string | null>(null);
   const [view, setView] = useState<View>('usage');
+  const [selected, setSelected] = useState<string | null>(null);
 
   const [asOf, setAsOf] = useState(() => Date.now());
   const [reloadKey, setReloadKey] = useState(0);
@@ -95,6 +99,7 @@ export function App(): JSX.Element {
   const [members, setMembers] = useState<readonly MemberListEntry[] | null>(null);
   const [timeseries, setTimeseries] = useState<TimeseriesResponse | null>(null);
   const [models, setModels] = useState<ModelsResponse | null>(null);
+  const [detail, setDetail] = useState<MemberDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -138,6 +143,7 @@ export function App(): JSX.Element {
       setMembers(null);
       setTimeseries(null);
       setModels(null);
+      setDetail(null);
       setTokenError(messageOf(cause));
       return;
     }
@@ -183,6 +189,24 @@ export function App(): JSX.Element {
     };
   }, [token, request, reloadKey, range, handleFailure]);
 
+  useEffect(() => {
+    if (token === null || request === undefined || selected === null) return undefined;
+
+    const controller = new AbortController();
+    fetchMemberDetail(selected, request, token, controller.signal)
+      .then((body) => {
+        setDetail(body);
+      })
+      .catch((cause: unknown) => {
+        if (controller.signal.aborted) return;
+        handleFailure(cause);
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [token, request, reloadKey, selected, handleFailure]);
+
   const refresh = useCallback(() => {
     setAsOf(Date.now());
     setReloadKey((key) => key + 1);
@@ -193,6 +217,16 @@ export function App(): JSX.Element {
     // A preset means "as of now", so re-anchor rather than reusing whatever
     // instant the page happened to load at.
     setAsOf(Date.now());
+  }, []);
+
+  const openMember = useCallback((memberId: string) => {
+    setDetail(null);
+    setSelected(memberId);
+  }, []);
+
+  const closeMember = useCallback(() => {
+    setSelected(null);
+    setDetail(null);
   }, []);
 
   const handleRevoke = useCallback(
@@ -233,6 +267,14 @@ export function App(): JSX.Element {
     return anythingInRange && isNarrowed(selection) ? 'filtered-out' : 'no-usage';
   }, [summary, members, selection]);
 
+  const selectedName = useMemo(() => {
+    if (selected === null) return '';
+    const known =
+      members?.find((member) => member.member_id === selected) ??
+      summary?.members.find((member) => member.member_id === selected);
+    return known?.display_name ?? selected;
+  }, [selected, members, summary]);
+
   if (token === null) {
     return (
       <TokenGate
@@ -244,6 +286,11 @@ export function App(): JSX.Element {
         }}
       />
     );
+  }
+
+  function chooseView(next: View): void {
+    setView(next);
+    closeMember();
   }
 
   return (
@@ -259,18 +306,18 @@ export function App(): JSX.Element {
             <div className="segmented" role="group" aria-label="View">
               <button
                 type="button"
-                aria-pressed={view === 'usage'}
+                aria-pressed={view === 'usage' && selected === null}
                 onClick={() => {
-                  setView('usage');
+                  chooseView('usage');
                 }}
               >
                 Usage
               </button>
               <button
                 type="button"
-                aria-pressed={view === 'members'}
+                aria-pressed={view === 'members' && selected === null}
                 onClick={() => {
-                  setView('members');
+                  chooseView('members');
                 }}
               >
                 Members
@@ -286,6 +333,7 @@ export function App(): JSX.Element {
                 setMembers(null);
                 setTimeseries(null);
                 setModels(null);
+                setDetail(null);
                 setTokenError(null);
               }}
             >
@@ -310,7 +358,7 @@ export function App(): JSX.Element {
             sources={summary?.sources ?? []}
             onRefresh={refresh}
             loading={loading}
-            ranged={view === 'usage'}
+            ranged={view === 'usage' || selected !== null}
           />
 
           {error !== null && (
@@ -319,7 +367,18 @@ export function App(): JSX.Element {
             </div>
           )}
 
-          {view === 'usage' ? (
+          {selected !== null ? (
+            <MemberDetail
+              detail={detail}
+              timeseries={timeseries}
+              memberId={selected}
+              fallbackName={selectedName}
+              slots={slots}
+              loading={loading || detail === null}
+              now={asOf}
+              onBack={closeMember}
+            />
+          ) : view === 'usage' ? (
             <>
               <StatTiles totals={summary?.totals ?? null} reporting={reporting} />
 
@@ -364,6 +423,7 @@ export function App(): JSX.Element {
                     trends={trends}
                     bucket={timeseries?.bucket ?? 'day'}
                     slots={slots}
+                    onSelect={openMember}
                   />
                 )}
               </section>
@@ -391,6 +451,7 @@ export function App(): JSX.Element {
                   onRevoke={handleRevoke}
                   now={asOf}
                   loading={loading}
+                  onSelect={openMember}
                 />
               )}
             </section>

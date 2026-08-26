@@ -74,6 +74,7 @@ function renderWith(
       trends={options.trends ?? new Map()}
       bucket="day"
       slots={options.slots ?? new Map()}
+      onSelect={() => undefined}
     />,
   );
 }
@@ -228,5 +229,10 @@ describe('MemberTable', () => {
     for (const id of ['m_a', 'm_b', 'm_c']) {
       expect(markup).toContain(`background:${memberColor(id, slots)}`);
     }
+  });
+
+  it('makes each member name a control that opens their page', () => {
+    const markup = renderWith(THIRDS);
+    expect(markup).toContain('class="link-button member-name"');
   });
 });

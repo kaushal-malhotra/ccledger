@@ -967,6 +967,44 @@ pre.command {
   gap: 8px;
 }
 
+/* A button that reads as a link: the member name opens their page, and a
+   `<button>` is what a thing that changes the view in place actually is. */
+.link-button {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--accent-ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+/* ---------------------------------------------------------------- detail -- */
+
+.detail-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.detail-name {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 17px;
+}
+
+.detail-sub {
+  font-size: 11.5px;
+}
+
 /* ------------------------------------------------------------ responsive -- */
 
 @media (max-width: 1080px) {

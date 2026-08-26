@@ -32,7 +32,13 @@ function entry(overrides: Partial<MemberListEntry> & Pick<MemberListEntry, 'memb
 /** Renders the list. The revoke callback is never fired by static rendering. */
 function render(members: readonly MemberListEntry[]): string {
   return renderToStaticMarkup(
-    <MembersView members={members} onRevoke={() => Promise.resolve()} now={NOW} loading={false} />,
+    <MembersView
+      members={members}
+      onRevoke={() => Promise.resolve()}
+      now={NOW}
+      loading={false}
+      onSelect={() => undefined}
+    />,
   );
 }
 
