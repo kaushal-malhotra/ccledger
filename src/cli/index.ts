@@ -15,6 +15,8 @@ import { Command, InvalidArgumentError } from 'commander';
 import { isValidTimeZone, systemTimeZone } from '../shared/alerts.js';
 import type { ServerMode } from '../shared/types.js';
 import { VERSION } from '../shared/version.js';
+import type { BackupOptions } from './backup.js';
+import { runBackup } from './backup.js';
 import type { DoctorOptions } from './doctor.js';
 import { runDoctor } from './doctor.js';
 import type { InviteOptions } from './invite.js';
@@ -102,6 +104,17 @@ export function buildProgram(): Command {
     .option('--endpoint <url>', 'base URL to bundle; defaults to what serve last advertised')
     .action((displayName: string) => {
       runInvite(displayName, invite.opts<InviteOptions>());
+    });
+
+  const backup = program
+    .command('backup')
+    .description('copy the database to a file while the server keeps running')
+    .argument('<path>', 'file to write the snapshot to');
+  backup
+    .option('-d, --db <path>', 'SQLite database file', DEFAULT_DB_PATH)
+    .option('-f, --force', 'overwrite the destination if it already exists')
+    .action(async (path: string) => {
+      await runBackup(path, backup.opts<BackupOptions>());
     });
 
   const setup = program

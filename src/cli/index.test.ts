@@ -77,7 +77,34 @@ describe('buildProgram', () => {
       .commands.map((command) => command.name())
       .sort();
 
-    expect(names).toEqual(['doctor', 'invite', 'serve', 'setup', 'uninstall']);
+    expect(names).toEqual(['backup', 'doctor', 'invite', 'serve', 'setup', 'uninstall']);
+  });
+});
+
+describe('backup options', () => {
+  it('defaults to the same database serve writes to', () => {
+    const options = parseCommand('backup', ['backup', './snapshot.db']);
+
+    // Same default as `serve` and `invite`: an admin who has never passed --db
+    // should not have to start now, on the one command where naming the wrong
+    // file means backing up something that is not the database.
+    expect(options['db']).toBe('./ccledger.db');
+    expect(options['force']).toBeUndefined();
+  });
+
+  it('takes the flags it is given', () => {
+    const path = tempDbPath();
+
+    const options = parseCommand('backup', ['backup', './snapshot.db', '--db', path, '--force']);
+
+    expect(options['db']).toBe(path);
+    expect(options['force']).toBe(true);
+  });
+
+  it('requires somewhere to write the backup', () => {
+    // The destination is an argument rather than a flag, so leaving it out is a
+    // usage error and not a snapshot written somewhere unstated.
+    expect(() => parseCommand('backup', ['backup'])).toThrow();
   });
 });
 
