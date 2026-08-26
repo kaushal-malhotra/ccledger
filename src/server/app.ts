@@ -21,6 +21,7 @@ import type Database from 'better-sqlite3';
 import Fastify from 'fastify';
 import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 
+import { runAlertEvaluation } from './alerts.js';
 import { registerApiRoutes } from './api.js';
 import { requireAdmin, requireMember, revokeMember } from './auth.js';
 import { registerDashboard } from './dashboard.js';
@@ -328,6 +329,21 @@ export function buildApp(options: AppOptions): FastifyInstance {
           { counts: parsed.counts, result, memberId: member.id },
           'ingested OTLP batch',
         );
+
+        // After the insert transaction and outside this response. Two things
+        // are load-bearing about that ordering. Alert evaluation must see the
+        // rows this batch wrote, so it cannot run before the commit; and it
+        // must never decide the status code, so it is not awaited — a webhook
+        // has five seconds an attempt and three attempts, which is not time an
+        // exporter waiting on a 200 can be asked to spend. `runAlertEvaluation`
+        // absorbs its own failures, so `void` here discards a promise that
+        // cannot reject rather than one whose rejection is being ignored.
+        //
+        // Only when something was actually stored: a batch that was entirely a
+        // redelivery moves no number, so nothing in it can have newly crossed.
+        if (result.inserted > 0) {
+          void runAlertEvaluation(db, { memberId: member.id, logger: request.log });
+        }
 
         reply.code(200).type(JSON_CONTENT_TYPE).send(EXPORT_SUCCESS_BODY);
       },
