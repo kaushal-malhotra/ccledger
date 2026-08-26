@@ -130,6 +130,30 @@ export function formatRelative(ms: number, now: number): string {
   return formatDate(ms);
 }
 
+/**
+ * How long until something, in the same units and the opposite direction:
+ * `in 23h`, `in 4m`, `expired`.
+ *
+ * `formatRelative` cannot do this. It measures elapsed time and folds every
+ * negative value to `just now`, so an expiry a day away renders as though it
+ * had already passed — which is exactly backwards for the one thing anybody
+ * reads an expiry to find out.
+ */
+export function formatUntil(ms: number, now: number): string {
+  const remaining = ms - now;
+  if (remaining <= 0) return 'expired';
+
+  const minutes = Math.floor(remaining / 60_000);
+  if (minutes < 1) return 'in under a minute';
+  if (minutes < 60) return `in ${String(minutes)}m`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `in ${String(hours)}h`;
+
+  const days = Math.floor(hours / 24);
+  return `in ${String(days)}d`;
+}
+
 /** The label under a range picker: `Aug 20 – Aug 27, 2026`, in local time. */
 export function formatRangeLabel(from: number, to: number): string {
   // The range is half-open, so the last instant it covers is a millisecond

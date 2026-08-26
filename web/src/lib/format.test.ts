@@ -13,6 +13,7 @@ import {
   formatCount,
   formatPercent,
   formatRelative,
+  formatUntil,
 } from './format.js';
 
 /** A fixed present, so "3h ago" means the same thing on every machine. */
@@ -86,5 +87,23 @@ describe('COST_DISCLAIMER', () => {
   it('says the figure is notional rather than money that was spent', () => {
     expect(COST_DISCLAIMER).toContain('notional');
     expect(COST_DISCLAIMER).toContain('not real spend');
+  });
+});
+
+describe('formatUntil', () => {
+  const NOW = Date.UTC(2026, 7, 26, 12, 0, 0);
+
+  it('counts down in the largest unit that still reads as a quantity', () => {
+    expect(formatUntil(NOW + 23 * 60 * 60 * 1000, NOW)).toBe('in 23h');
+    expect(formatUntil(NOW + 45 * 60 * 1000, NOW)).toBe('in 45m');
+    expect(formatUntil(NOW + 3 * 24 * 60 * 60 * 1000, NOW)).toBe('in 3d');
+    expect(formatUntil(NOW + 20_000, NOW)).toBe('in under a minute');
+  });
+
+  it('says expired rather than folding the past into the present', () => {
+    // This is the whole reason it exists: formatRelative answers "just now"
+    // here, which reads as though the code were still good.
+    expect(formatUntil(NOW - 1000, NOW)).toBe('expired');
+    expect(formatUntil(NOW, NOW)).toBe('expired');
   });
 });
