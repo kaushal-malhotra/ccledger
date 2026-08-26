@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/shakibbinkabir/ccledger/security/advisories/new
+    about: Report privately. Never in a public issue — see SECURITY.md.
+  - name: No data on the dashboard
+    url: https://github.com/shakibbinkabir/ccledger/blob/main/docs/troubleshoot.md
+    about: Run `ccledger doctor` first. Six checks, each with a remedy.
+  - name: Question about what ccledger sends
+    url: https://github.com/shakibbinkabir/ccledger/blob/main/docs/privacy.md
+    about: A table of what is sent and what is not, and how to verify it yourself.

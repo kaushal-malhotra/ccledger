@@ -1,0 +1,160 @@
+name: Bug report
+description: Something is not working
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this.
+
+        **Before you start:** if the symptom is "no data on the dashboard", run
+        `ccledger doctor` first. It runs six checks and prints a remedy for
+        each failure, and the answer is a missing Claude Code restart more
+        often than anything else.
+
+        **Do not report a security problem here.** Use the private channels in
+        [SECURITY.md](https://github.com/shakibbinkabir/ccledger/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: ccledger doctor --json
+      description: >
+        Paste the whole output. This resolves most reports on its own. Tokens
+        are masked before they are printed, so it is safe to paste in public —
+        but read it over anyway.
+      render: json
+      placeholder: |
+        $ ccledger doctor --json
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+      placeholder: |
+        I ran `ccledger setup --code …` on my work laptop, restarted Claude
+        Code, used it for ten minutes, and I still do not appear on the
+        dashboard. `doctor` passes all six checks.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: >
+        Numbered, from a known starting point. If it only happens sometimes,
+        say how often and what is different when it does.
+      placeholder: |
+        1. `ccledger serve --db ./ccledger.db`
+        2. `ccledger invite alice`
+        3. On the other machine, `npx ccledger setup --code …`
+        4. Restart Claude Code, ask it something
+        5. Dashboard is still empty
+    validations:
+      required: true
+
+  - type: input
+    id: ccledger-version
+    attributes:
+      label: ccledger version
+      description: '`ccledger --version`'
+      placeholder: '0.1.0'
+    validations:
+      required: true
+
+  - type: input
+    id: claude-code-version
+    attributes:
+      label: Claude Code version
+      description: >
+        `claude --version`. Telemetry attribute names are not a stable API, so
+        this matters more than it looks — a version this project has not seen
+        is a real lead.
+      placeholder: '2.1.241'
+    validations:
+      required: true
+
+  - type: input
+    id: node-version
+    attributes:
+      label: Node version
+      description: '`node --version`, on whichever machine has the problem'
+      placeholder: 'v22.14.0'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - WSL
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: side
+    attributes:
+      label: Where does it go wrong
+      options:
+        - Server — serve, invite, backup
+        - Client — setup, doctor, uninstall
+        - Dashboard — the web UI
+        - Alerts
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Server mode
+      options:
+        - Laptop mode
+        - VPS mode with the Docker stack
+        - VPS mode, some other way
+        - Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server output
+      description: >
+        The `ccledger serve` banner and anything logged around the failure.
+        `CCLEDGER_LOG_LEVEL=debug` makes it show every request. Remove any
+        `cca_` or `ccm_` token before pasting.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: >
+        Other OTLP tooling on the machine, a proxy in front of the server, an
+        unusual `~/.claude/settings.json` — anything you noticed.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I restarted Claude Code after running `ccledger setup`
+          required: true
+        - label: I searched existing issues
+          required: true
+        - label: There is no token in anything I pasted above
+          required: true

@@ -1,0 +1,108 @@
+name: Feature request
+description: Suggest something ccledger should do
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before writing anything up, four things are permanently out of scope.
+        They are not defaults waiting to be flipped, and a request for one will
+        be closed with a link rather than discussed again:
+
+        - **Capturing prompts, responses, or tool content.** Claude Code can
+          export it and ccledger will never turn it on. Once it can, the trust
+          argument in the README stops being true.
+        - **Anything that puts ccledger in the request path.** No proxy, no
+          wrapper, no credential handling.
+        - **Tracking claude.ai browser or desktop usage.** Not possible without
+          intercepting credentials.
+        - **Storing the account identity attributes** that the parser drops.
+
+        The reasoning is in
+        [CONTRIBUTING.md](https://github.com/shakibbinkabir/ccledger/blob/main/CONTRIBUTING.md#what-will-not-be-merged).
+        Everything else is open.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you having
+      description: >
+        The situation, not the solution. What were you trying to find out, and
+        what did ccledger make you do instead?
+      placeholder: |
+        Our billing cycle starts on the 12th, so neither "30 days" nor a
+        calendar month lines up with what finance asks me for. I end up
+        exporting the SQLite file and running the query by hand every month.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do
+      description: If you have a specific idea, describe it. If not, leave this.
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: >
+        Existing flags, a query against the database, another tool. Useful even
+        when it did not work — often the answer is a smaller change than the
+        proposal.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      options:
+        - Dashboard
+        - Read API
+        - Alerts
+        - CLI — serve, invite, backup
+        - CLI — setup, doctor, uninstall
+        - Ingest or storage
+        - Deployment or packaging
+        - Documentation
+        - Something else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: How big is your team
+      description: >
+        ccledger is aimed at teams of two to ten. It is worth knowing when a
+        request comes from well outside that, because the answer may be that a
+        different tool fits better.
+      options:
+        - Just me
+        - 2–5
+        - 6–10
+        - 11–25
+        - More than 25
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Would you like to build it
+      options:
+        - label: I would be willing to open a pull request for this
+          required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: This is not one of the four out-of-scope items above
+          required: true
+        - label: I searched existing issues
+          required: true
