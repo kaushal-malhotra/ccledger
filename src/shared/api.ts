@@ -352,3 +352,45 @@ export interface AlertRuleDeleteResponse {
   /** Fires removed alongside it; they reference the rule and cannot outlive it. */
   readonly fires_deleted: number;
 }
+
+/** One invitation that has been issued and not yet claimed. */
+export interface OpenInvite {
+  readonly code: string;
+  readonly display_name: string;
+  readonly created_at: number;
+  readonly expires_at: number;
+}
+
+/** `GET /api/invites`. */
+export interface InvitesResponse {
+  /**
+   * The base URL invites carry, or `null` when this server has never recorded
+   * one. The dashboard needs to tell those apart: with no endpoint there is
+   * nothing to invite anyone to, and the fix is a serve flag rather than
+   * anything that can be done from a browser.
+   */
+  readonly endpoint: string | null;
+  /** Unclaimed and unexpired, oldest first. */
+  readonly invites: readonly OpenInvite[];
+}
+
+/** The body `POST /api/invites` takes. */
+export interface InviteBody {
+  readonly display_name: string;
+}
+
+/** `POST /api/invites`. */
+export interface InviteResponse {
+  readonly code: string;
+  readonly display_name: string;
+  readonly expires_at: number;
+  readonly endpoint: string;
+  /** The base64url blob that carries the endpoint and the code together. */
+  readonly invite: string;
+  /**
+   * The whole line to send a teammate, built with the package name this build
+   * was published under. The dashboard shows this rather than assembling it,
+   * so the name cannot drift from what `ccledger invite` prints.
+   */
+  readonly command: string;
+}

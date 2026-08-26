@@ -29,6 +29,7 @@ import type Database from 'better-sqlite3';
 import type { FastifyInstance } from 'fastify';
 
 import { registerAlertRoutes } from './alertroutes.js';
+import { registerInviteRoutes } from './inviteroutes.js';
 import { findMember, revokeMember } from './auth.js';
 import { JSON_CONTENT_TYPE, fail } from './reply.js';
 import {
@@ -245,9 +246,10 @@ function pickTotals(row: UsageTotals): UsageTotals {
  * installed again.
  */
 export function registerApiRoutes(app: FastifyInstance, db: Database.Database): void {
-  // Same scope, same guard. Alerting is enough routes to be its own file and
-  // not enough to be its own prefix.
+  // Same scope, same guard. Each of these is enough routes to be its own file
+  // and not enough to be its own prefix.
   registerAlertRoutes(app, db);
+  registerInviteRoutes(app, db);
 
   app.get<{ Querystring: RangeQuery }>(
     `${ADMIN_API_PREFIX}/summary`,
