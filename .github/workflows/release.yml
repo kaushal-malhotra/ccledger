@@ -11,6 +11,12 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # A tag push is the intended trigger and it is not always enough: GitHub can
+  # decline to raise the event, and when it does there is a tag in the world
+  # with no release behind it and no way to ask for one. Dispatching against
+  # the tag runs exactly the same job — every step reads the ref, so the tag is
+  # still the only input and there is no form to mistype.
+  workflow_dispatch:
 
 permissions:
   contents: read
