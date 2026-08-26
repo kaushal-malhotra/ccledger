@@ -17,14 +17,16 @@
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
 
-    "outDir": "dist",
-    "declaration": true,
-    "sourceMap": true
+    // `scripts/build.mjs` emits, with esbuild. This config only type-checks:
+    // `npm run typecheck` runs `tsc --noEmit` over `src/` and `test/` together,
+    // and nothing here is ever asked to write a file.
+    "noEmit": true
   },
-  // `test/` is in scope so the cross-cutting integration test is type-checked by
-  // `npm run typecheck`; without it `tsc --noEmit` passes on code it never read.
-  // `rootDir` therefore lives in `tsconfig.build.json`, which is the only config
-  // that emits and the only one whose file set is `src/` alone.
+  // `test/` is in scope so the cross-cutting integration tests are type-checked
+  // by `npm run typecheck`; without it `tsc --noEmit` passes on code it never
+  // read. Keeping the colocated tests in scope costs nothing at emit time,
+  // because this config does not emit — the build's file set is decided by
+  // `scripts/build.mjs`, which skips `*.test.ts`.
   "include": ["src", "test"],
   "exclude": ["node_modules", "dist", "web"]
 }
