@@ -34,6 +34,16 @@ is what you want you should use one of them.
 ccledger is the team version. Every machine reports to one server you run, so
 you get per-person attribution across the whole team in one place.
 
+## In production at
+
+[Neovogent AI](https://www.neovogent.com) — a UK company building specialized
+AI assistants that run inside a client's own environment rather than a public
+cloud — runs ccledger self-hosted on a $5 AWS Lightsail instance to see how its
+team's Claude Code usage divides up.
+
+That is the whole intended shape of this: one small server somebody already
+owns, holding numbers about their own team, under their own domain.
+
 ## Quick start
 
 **On the machine that will hold the data** — a laptop on the office network, or
