@@ -19,7 +19,7 @@ turns them on. The full list is in [privacy.md](privacy.md).
 a proxy, it does not touch your Claude login, and Claude Code keeps working
 exactly the same when the ccledger server is unreachable.
 
-**How to undo it.** `npx ccledger uninstall`, any time, no permission needed.
+**How to undo it.** `npx @thisissbk/ccledger uninstall`, any time, no permission needed.
 
 ---
 
@@ -29,7 +29,7 @@ It looks like this. The long string is the invite; it bundles the server
 address and a single-use join code.
 
 ```console
-$ npx ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6Ly9jY2xlZGdlci5sb2NhbDo0MzE4Iiwi…
+$ npx @thisissbk/ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6Ly9jY2xlZGdlci5sb2NhbDo0MzE4Iiwi…
 ```
 
 You need Node 22 or newer:
@@ -41,7 +41,7 @@ v22.14.0
 
 `npx` downloads ccledger, runs it once, and does not install it. If you would
 rather have the command permanently — worth it, because `ccledger doctor` is
-the thing you will want later — use `npm install -g ccledger` and drop the
+the thing you will want later — use `npm install -g @thisissbk/ccledger` and drop the
 `npx`.
 
 ## 2. Read the disclosure and say yes
@@ -51,7 +51,7 @@ Nothing is written before you answer. This is the whole run:
 ![ccledger setup: the disclosure, the confirmation prompt, the four paths it wrote, and the restart notice](images/setup.png)
 
 ```console
-$ npx ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6Ly9jY2xlZGdlci5sb2NhbDo0MzE4Iiwi…
+$ npx @thisissbk/ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6Ly9jY2xlZGdlci5sb2NhbDo0MzE4Iiwi…
 
 ccledger will send, per API request:
   model name, token counts, duration, timestamp, session id
@@ -61,7 +61,7 @@ It will NOT send:
   command text, or repository names
 
 Config written to: ~/.claude/settings.json
-Remove any time with: npx ccledger uninstall
+Remove any time with: npx @thisissbk/ccledger uninstall
 
 On this machine that file is: /home/alice/.claude/settings.json
 Joining also tells the server this machine name and operating system, once.
@@ -172,7 +172,7 @@ $ ls ~/.claude/settings.json*
 It stops rather than overwriting when those keys already hold something else:
 
 ```console
-$ npx ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6…
+$ npx @thisissbk/ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6…
 
 These keys are already set in /home/alice/.claude/settings.json:
 
@@ -196,7 +196,7 @@ somewhere else — it says so and tells you to run `ccledger uninstall` first.
 ## Removing it
 
 ```console
-$ npx ccledger uninstall
+$ npx @thisissbk/ccledger uninstall
 
 These keys will be removed from /home/alice/.claude/settings.json:
 

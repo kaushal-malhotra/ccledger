@@ -21,6 +21,7 @@ import { hostname, platform, release } from 'node:os';
 import { OTLP_LOGS_PATH, JOIN_PATH, MEMBER_TOKEN_PREFIX } from '../shared/constants.js';
 import { MAX_DISPLAY_NAME_LENGTH, decodeInvite, normaliseDisplayName } from '../shared/invite.js';
 import type { JoinRequestBody, JoinResponseBody } from '../shared/types.js';
+import { PACKAGE_NAME } from '../shared/version.js';
 import { errorTextOf, request } from './http.js';
 import { fail, maskSecrets, say, warn } from './io.js';
 import type { JsonEntry } from './jsonedit.js';
@@ -58,7 +59,7 @@ const DISCLOSURE: readonly string[] = [
   '  command text, or repository names',
   '',
   'Config written to: ~/.claude/settings.json',
-  'Remove any time with: npx ccledger uninstall',
+  `Remove any time with: npx ${PACKAGE_NAME} uninstall`,
 ];
 
 /** A valid OTLP logs payload carrying no records. Proves the token without storing a row. */

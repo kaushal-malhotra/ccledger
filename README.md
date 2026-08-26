@@ -3,9 +3,9 @@
 Team usage ledger for Claude Code. See who is using how many tokens.
 
 [![CI](https://github.com/shakibbinkabir/ccledger/actions/workflows/ci.yml/badge.svg)](https://github.com/shakibbinkabir/ccledger/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/ccledger.svg)](https://www.npmjs.com/package/ccledger)
-[![license](https://img.shields.io/npm/l/ccledger.svg)](LICENSE)
-[![node](https://img.shields.io/node/v/ccledger.svg)](package.json)
+[![npm](https://img.shields.io/npm/v/%40thisissbk%2Fccledger.svg)](https://www.npmjs.com/package/@thisissbk/ccledger)
+[![license](https://img.shields.io/npm/l/%40thisissbk%2Fccledger.svg)](LICENSE)
+[![node](https://img.shields.io/node/v/%40thisissbk%2Fccledger.svg)](package.json)
 
 ![The ccledger dashboard: four stat tiles, tokens over time as a stacked area, tokens by model, and a per-member table with share, trend and estimated cost](docs/images/dashboard.png)
 
@@ -40,7 +40,7 @@ you get per-person attribution across the whole team in one place.
 a VPS. Three commands:
 
 ```console
-$ npm install -g ccledger
+$ npm install -g @thisissbk/ccledger
 added 79 packages in 8s
 
 $ ccledger serve
@@ -80,10 +80,14 @@ Invite for Alice Chen
 
 Send them this line:
 
-  npx ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6Ly9jY2xlZGdlci5sb2NhbDo0MzE4IiwiY29kZSI6IjU3VEotNTc2RS05NUVLIiwibmFtZSI6IkFsaWNlIENoZW4ifQ
+  npx @thisissbk/ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6Ly9jY2xlZGdlci5sb2NhbDo0MzE4IiwiY29kZSI6IjU3VEotNTc2RS05NUVLIiwibmFtZSI6IkFsaWNlIENoZW4ifQ
 
 The code works once and expires in 24 hours.
 ```
+
+The package is scoped — `@thisissbk/ccledger` — because npm holds the
+unscoped name for an unrelated project. The command it installs is plain
+`ccledger`.
 
 The server has to keep running to receive anything. See
 [docs/install.md](docs/install.md) for both deployment modes, including the
@@ -94,7 +98,7 @@ Docker stack that gets you TLS and a restart policy.
 ![ccledger setup running on a teammate's machine: the disclosure, the confirmation, the four paths it wrote, and the restart notice](docs/images/setup.png)
 
 ```console
-$ npx ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6…
+$ npx @thisissbk/ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6…
 
 ccledger will send, per API request:
   model name, token counts, duration, timestamp, session id
@@ -104,7 +108,7 @@ It will NOT send:
   command text, or repository names
 
 Config written to: ~/.claude/settings.json
-Remove any time with: npx ccledger uninstall
+Remove any time with: npx @thisissbk/ccledger uninstall
 
 On this machine that file is: /home/alice/.claude/settings.json
 Joining also tells the server this machine name and operating system, once.

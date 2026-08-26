@@ -5,13 +5,13 @@ One person on the team runs the server. Everyone else runs
 
 There are two ways to run it.
 
-|               | Laptop mode                                        | VPS mode                           |
-| ------------- | -------------------------------------------------- | ---------------------------------- |
-| Who it is for | A team in one office or on one VPN                 | Anyone remote                      |
-| Transport     | Plain HTTP over the LAN                            | HTTPS, certificate handled for you |
-| Discovery     | Advertised as `ccledger.local` over mDNS           | A domain you own                   |
-| Uptime        | Only while that laptop is awake and on the network | Always                             |
-| Setup         | `npm install -g ccledger && ccledger serve`        | `docker compose up -d`             |
+|               | Laptop mode                                            | VPS mode                           |
+| ------------- | ------------------------------------------------------ | ---------------------------------- |
+| Who it is for | A team in one office or on one VPN                     | Anyone remote                      |
+| Transport     | Plain HTTP over the LAN                                | HTTPS, certificate handled for you |
+| Discovery     | Advertised as `ccledger.local` over mDNS               | A domain you own                   |
+| Uptime        | Only while that laptop is awake and on the network     | Always                             |
+| Setup         | `npm install -g @thisissbk/ccledger && ccledger serve` | `docker compose up -d`             |
 
 Laptop mode is the fast way to find out whether the thing is useful to you.
 Move to VPS mode when it is, or immediately if anyone on the team works
@@ -31,11 +31,14 @@ copying that file, though tokens are tied to the database, so teammates re-run
 Node 22 or newer is required. `better-sqlite3` declares it, and on Node 20 the
 native addon crashes the process as soon as a database is opened.
 
+The package is scoped, `@thisissbk/ccledger`, because npm holds the unscoped
+name for an unrelated project. The command it installs is plain `ccledger`.
+
 ```console
 $ node --version
 v22.14.0
 
-$ npm install -g ccledger
+$ npm install -g @thisissbk/ccledger
 
 added 79 packages in 8s
 
@@ -156,7 +159,7 @@ Invite for Alice Chen
 
 Send them this line:
 
-  npx ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6Ly9jY2xlZGdlci5sb2NhbDo0MzE4IiwiY29kZSI6IjU3VEotNTc2RS05NUVLIiwibmFtZSI6IkFsaWNlIENoZW4ifQ
+  npx @thisissbk/ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHA6Ly9jY2xlZGdlci5sb2NhbDo0MzE4IiwiY29kZSI6IjU3VEotNTc2RS05NUVLIiwibmFtZSI6IkFsaWNlIENoZW4ifQ
 
 The code works once and expires in 24 hours.
 
@@ -311,7 +314,7 @@ Invite for Alice Chen
 
 Send them this line:
 
-  npx ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHBzOi8vY2NsZWRnZXIuZXhhbXBsZS5jb20iLCJjb2RlIjoiQldIVy01RjNWLUJSWE4iLCJuYW1lIjoiQWxpY2UgQ2hlbiJ9
+  npx @thisissbk/ccledger setup --code eyJ2IjoxLCJlbmRwb2ludCI6Imh0dHBzOi8vY2NsZWRnZXIuZXhhbXBsZS5jb20iLCJjb2RlIjoiQldIVy01RjNWLUJSWE4iLCJuYW1lIjoiQWxpY2UgQ2hlbiJ9
 
 The code works once and expires in 24 hours.
 ```

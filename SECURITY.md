@@ -49,7 +49,7 @@ you sit on something.
 ## Supported versions
 
 Pre-1.0, only the latest published minor gets fixes. Upgrading is
-`npm install -g ccledger@latest`, or `git pull && docker compose up -d --build`
+`npm install -g @thisissbk/ccledger@latest`, or `git pull && docker compose up -d --build`
 for VPS mode. Migrations run on boot and the database carries forward.
 
 | Version | Supported |
