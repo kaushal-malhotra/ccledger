@@ -1,6 +1,10 @@
 node_modules/
 dist/
 src/server/public/
+
+# `npm pack` writes the tarball into the directory it is run from, and the
+# acceptance check for a release runs it here.
+*.tgz
 *.db
 *.db-wal
 *.db-shm
