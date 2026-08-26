@@ -3,9 +3,9 @@
 Team usage ledger for Claude Code. See who is using how many tokens.
 
 [![CI](https://github.com/shakibbinkabir/ccledger/actions/workflows/ci.yml/badge.svg)](https://github.com/shakibbinkabir/ccledger/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/%40thisissbk%2Fccledger.svg)](https://www.npmjs.com/package/@thisissbk/ccledger)
-[![license](https://img.shields.io/npm/l/%40thisissbk%2Fccledger.svg)](LICENSE)
-[![node](https://img.shields.io/node/v/%40thisissbk%2Fccledger.svg)](package.json)
+[![npm](https://img.shields.io/npm/v/@thisissbk/ccledger)](https://www.npmjs.com/package/@thisissbk/ccledger)
+[![license](https://img.shields.io/github/license/shakibbinkabir/ccledger)](LICENSE)
+[![node](https://img.shields.io/node/v/@thisissbk/ccledger)](package.json)
 
 ![The ccledger dashboard: four stat tiles, tokens over time as a stacked area, tokens by model, and a per-member table with share, trend and estimated cost](docs/images/dashboard.png)
 
