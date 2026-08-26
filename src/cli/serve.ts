@@ -18,7 +18,8 @@ import type { Database } from '../db/index.js';
 import { createJoinCodeStore } from '../db/joincodes.js';
 import { ensureAdminToken } from '../server/auth.js';
 import { buildApp } from '../server/app.js';
-import { CONFIG_PUBLIC_URL, CONFIG_SERVER_NAME } from '../shared/constants.js';
+import { normaliseTimeZone, systemTimeZone } from '../shared/alerts.js';
+import { CONFIG_PUBLIC_URL, CONFIG_SERVER_NAME, CONFIG_TIMEZONE } from '../shared/constants.js';
 import { normaliseDisplayName, normaliseEndpoint } from '../shared/invite.js';
 import type { ServerMode } from '../shared/types.js';
 import { VERSION } from '../shared/version.js';
@@ -73,6 +74,12 @@ export interface ServeOptions {
   readonly name?: string;
   /** Issue a new admin token, invalidating the current one. */
   readonly rotateAdminToken?: boolean;
+  /**
+   * IANA zone alert windows are calendar-aligned to. Defaults to the stored
+   * one, then to this machine's — a "weekly" budget that resets at a surprising
+   * hour is worse than one that resets at an inconvenient but predictable one.
+   */
+  readonly timezone?: string;
 }
 
 /** Formats a base URL, bracketing a bare IPv6 literal so the result is clickable. */
@@ -147,6 +154,31 @@ function resolveLogLevel(): string {
   return 'info';
 }
 
+/**
+ * The zone alert windows will be aligned to, and whether this boot chose it.
+ *
+ * An explicit flag always wins and is written down. Otherwise whatever a
+ * previous boot recorded stands: the zone is half of the debounce key, so a
+ * server that moved machines, or started under a different `TZ`, would
+ * otherwise redraw every window boundary and let this week's alerts fire a
+ * second time. Only a database that has never seen a `serve` falls back to the
+ * machine.
+ */
+export function resolveTimeZoneChoice(
+  stored: string | undefined,
+  requested: string | undefined,
+): { readonly timezone: string; readonly source: 'flag' | 'stored' | 'system' } {
+  if (requested !== undefined) {
+    const normalised = normaliseTimeZone(requested);
+    if (normalised === undefined) {
+      fail(`--timezone is not a zone this Node build knows: ${requested}`);
+    }
+    return { timezone: normalised, source: 'flag' };
+  }
+  if (stored !== undefined) return { timezone: stored, source: 'stored' };
+  return { timezone: systemTimeZone(), source: 'system' };
+}
+
 /** What `printBanner` needs to say where teammates should point Claude Code. */
 interface BannerOptions {
   readonly mode: ServerMode;
@@ -158,6 +190,8 @@ interface BannerOptions {
   readonly advertisedIsStored: boolean;
   readonly databasePath: string;
   readonly port: number;
+  /** The zone alert windows reset on. */
+  readonly timezone: string;
 }
 
 /** Prints the endpoints, the database, and whatever the mode has to warn about. */
@@ -169,6 +203,10 @@ function printBanner(options: BannerOptions): void {
   say(`  ingest      ${endpointBase}${INGEST_PATH}`);
   say(`  health      ${endpointBase}/health`);
   say(`  database    ${options.databasePath}`);
+  // Printed unprompted because it is the one setting whose wrong value is
+  // invisible: everything works, and the weekly budget resets on a day nobody
+  // expected.
+  say(`  alert reset ${options.timezone}  (calendar day and week boundaries)`);
   say();
 
   if (options.mode === 'laptop') {
@@ -236,6 +274,12 @@ export async function runServe(options: ServeOptions): Promise<void> {
   if (options.name !== undefined && serverName === undefined) {
     fail('--name must be 1 to 64 printable characters');
   }
+  // Checked here as well as in `resolveTimeZoneChoice`, which cannot run until
+  // the database is open: a mistyped zone should cost one line of output rather
+  // than a socket that binds and a token that is issued.
+  if (options.timezone !== undefined && normaliseTimeZone(options.timezone) === undefined) {
+    fail(`--timezone is not a zone this Node build knows: ${options.timezone}`);
+  }
 
   const databasePath = resolve(options.db);
   const db: Database.Database = openMigratedDatabase(options.db);
@@ -300,6 +344,12 @@ export async function runServe(options: ServeOptions): Promise<void> {
   }
   const advertised = publicUrl ?? storedPublicUrl;
 
+  // Written on every boot, like the public URL: an explicit flag is a decision
+  // and a stored value is a previous one, and either way the database is where
+  // evaluation reads it from.
+  const zone = resolveTimeZoneChoice(getConfig(db, CONFIG_TIMEZONE), options.timezone);
+  setConfig(db, CONFIG_TIMEZONE, zone.timezone, now);
+
   const pruned = createJoinCodeStore(db).prune(now);
   if (pruned > 0) {
     warn(`pruned ${String(pruned)} expired join code${pruned === 1 ? '' : 's'}`);
@@ -313,6 +363,7 @@ export async function runServe(options: ServeOptions): Promise<void> {
     advertisedIsStored: publicUrl === undefined && storedPublicUrl !== undefined,
     databasePath,
     port: options.port,
+    timezone: zone.timezone,
   });
 
   const admin = ensureAdminToken(db, { rotate: options.rotateAdminToken ?? false, now });

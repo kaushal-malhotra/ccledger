@@ -12,6 +12,7 @@ import { pathToFileURL } from 'node:url';
 
 import { Command, InvalidArgumentError } from 'commander';
 
+import { isValidTimeZone, systemTimeZone } from '../shared/alerts.js';
 import type { ServerMode } from '../shared/types.js';
 import { VERSION } from '../shared/version.js';
 import type { DoctorOptions } from './doctor.js';
@@ -36,6 +37,19 @@ export function parsePort(value: string): number {
     throw new InvalidArgumentError('expected an integer between 1 and 65535.');
   }
   return port;
+}
+
+/**
+ * Commander argument parser for `--timezone`. Rejected here rather than at the
+ * server, so a typo costs a usage message instead of a running server whose
+ * weekly budgets reset on the wrong day.
+ */
+export function parseTimeZone(value: string): string {
+  const zone = value.trim();
+  if (!isValidTimeZone(zone)) {
+    throw new InvalidArgumentError('expected an IANA zone name, e.g. Europe/Berlin or UTC.');
+  }
+  return zone;
 }
 
 /** Commander argument parser for `--mode`. */
@@ -70,6 +84,11 @@ export function buildProgram(): Command {
     .option('--public-url <url>', 'base URL teammates reach this server on')
     .option('--name <label>', 'name shown to a teammate when they join')
     .option('--rotate-admin-token', 'issue a new admin token, invalidating the current one')
+    .option(
+      '--timezone <zone>',
+      `IANA zone alert day and week windows reset on (this machine: ${systemTimeZone()})`,
+      parseTimeZone,
+    )
     .action(async () => {
       await runServe(serve.opts<ServeOptions>());
     });
