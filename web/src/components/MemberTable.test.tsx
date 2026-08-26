@@ -15,6 +15,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
 import type { MemberUsage, UsageTotals } from '../../../src/shared/api.js';
+import { assignSlots, memberColor } from '../lib/colors.js';
 
 import { MemberTable } from './MemberTable.js';
 
@@ -51,10 +52,29 @@ function totalsOf(members: readonly MemberUsage[]): UsageTotals {
   };
 }
 
-/** Renders the table over a member list. */
+/** Renders the table over a member list, with no trend data behind it. */
 function render(members: readonly MemberUsage[], loading = false): string {
+  return renderWith(members, { loading });
+}
+
+/** Renders the table with whichever of the chart-shaped props a test needs. */
+function renderWith(
+  members: readonly MemberUsage[],
+  options: {
+    readonly loading?: boolean;
+    readonly trends?: ReadonlyMap<string, number[]>;
+    readonly slots?: ReadonlyMap<string, number>;
+  } = {},
+): string {
   return renderToStaticMarkup(
-    <MemberTable members={members} totals={totalsOf(members)} loading={loading} />,
+    <MemberTable
+      members={members}
+      totals={totalsOf(members)}
+      loading={options.loading ?? false}
+      trends={options.trends ?? new Map()}
+      bucket="day"
+      slots={options.slots ?? new Map()}
+    />,
   );
 }
 
@@ -175,5 +195,38 @@ describe('MemberTable', () => {
     const markup = render([]);
     expect(markup).toContain('<table');
     expect(markup).not.toContain('<tfoot');
+  });
+
+  it('gives every row a sparkline described in words', () => {
+    const markup = renderWith(THIRDS, {
+      trends: new Map([
+        ['m_a', [10, 400, 30]],
+        ['m_b', [5, 5, 5]],
+      ]),
+    });
+
+    expect(markup).toContain('Alice: daily trend over 3 buckets, peaking at 400 tokens.');
+    // Carol has no trend at all, which is not the same as a flat one.
+    expect(markup).toContain('Carol: no usage in this range.');
+    expect(markup).toContain('spark');
+  });
+
+  it('leaves the trend column unsortable, having no order a reader would agree on', () => {
+    const markup = renderWith(THIRDS);
+    // Every other header is a button; this one is plain text.
+    expect(markup).toContain('<span class="th-inner" title="This member across the range');
+  });
+
+  it('marks each row with the colour that member wears in the charts', () => {
+    const slots = assignSlots([
+      { member_id: 'm_a', created_at: 1 },
+      { member_id: 'm_b', created_at: 2 },
+      { member_id: 'm_c', created_at: 3 },
+    ]);
+    const markup = renderWith(THIRDS, { slots });
+
+    for (const id of ['m_a', 'm_b', 'm_c']) {
+      expect(markup).toContain(`background:${memberColor(id, slots)}`);
+    }
   });
 });

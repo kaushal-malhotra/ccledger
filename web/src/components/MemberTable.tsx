@@ -1,25 +1,38 @@
 import type { JSX, ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 
-import type { MemberUsage, UsageTotals } from '../../../src/shared/api.js';
+import type { BucketSize, MemberUsage, UsageTotals } from '../../../src/shared/api.js';
+import { memberColor } from '../lib/colors.js';
 import { formatCostMicros, formatCount, formatPercent } from '../lib/format.js';
+import { describeTrend } from '../lib/series.js';
 import { roundSharesPreservingTotal } from '../lib/share.js';
 import type { SortDirection, SortValue } from '../lib/sort.js';
 import { flipDirection, sortRows } from '../lib/sort.js';
 
 import { Est } from './Est.js';
+import { Sparkline } from './Sparkline.js';
 
 /** What the table renders. */
 export interface MemberTableProps {
   readonly members: readonly MemberUsage[];
   readonly totals: UsageTotals;
   readonly loading: boolean;
+  /** Per-member tokens per bucket, for the trend column. */
+  readonly trends: ReadonlyMap<string, number[]>;
+  /** The bucket the trends are in, so their descriptions can say so. */
+  readonly bucket: BucketSize;
+  /** Member id to palette slot, so a row's swatch matches its band. */
+  readonly slots: ReadonlyMap<string, number>;
 }
 
 /** A member row with the share the table will actually print. */
 interface Row extends MemberUsage {
   /** Rounded across the whole table so the column sums to exactly 100. */
   readonly display_share: number;
+  /** Tokens per bucket over the range. Empty when the range holds none. */
+  readonly trend: readonly number[];
+  /** This member's band colour, as a `var(--series-n)` reference. */
+  readonly color: string;
 }
 
 /** One column: how it sorts, how it renders, and what it totals to. */
@@ -29,9 +42,15 @@ interface Column {
   /** Expanded meaning, for the header's tooltip. */
   readonly title?: string;
   readonly numeric: boolean;
-  readonly sortValue: (row: Row) => SortValue;
+  /** Absent on a column there is no useful order for. */
+  readonly sortValue?: (row: Row) => SortValue;
   readonly cell: (row: Row) => ReactNode;
   readonly foot: (totals: UsageTotals, shareTotal: number) => ReactNode;
+}
+
+/** What the column factory needs that a row does not carry. */
+interface ColumnContext {
+  readonly bucket: BucketSize;
 }
 
 /** Rows drawn while the first response is still in flight. */
@@ -72,94 +91,116 @@ function countColumn(
 }
 
 /** Every column, left to right. */
-const COLUMNS: readonly Column[] = [
-  {
-    key: 'name',
-    label: 'Member',
-    numeric: false,
-    sortValue: (row) => row.display_name,
-    cell: (row) => (
-      <>
-        <span className="member-name">{row.display_name}</span>
-        {row.revoked_at !== null && (
-          <>
-            {' '}
-            <span className="badge badge-revoked">revoked</span>
-          </>
-        )}
-      </>
+function columnsFor(context: ColumnContext): Column[] {
+  return [
+    {
+      key: 'name',
+      label: 'Member',
+      numeric: false,
+      sortValue: (row) => row.display_name,
+      cell: (row) => (
+        <span className="member-cell">
+          {/* The same colour as this member's band in the chart above, so the
+              table doubles as a second legend and a reader can get from a
+              ribbon to its numbers without holding a hue in their head. */}
+          <span className="legend-swatch" style={{ background: row.color }} aria-hidden="true" />
+          <span className="member-name">{row.display_name}</span>
+          {row.revoked_at !== null && (
+            <>
+              {' '}
+              <span className="badge badge-revoked">revoked</span>
+            </>
+          )}
+        </span>
+      ),
+      foot: () => 'Total',
+    },
+    {
+      key: DEFAULT_SORT,
+      label: 'Share',
+      title: 'Percentage of the tokens this range holds, across everyone.',
+      numeric: true,
+      sortValue: (row) => row.share_pct,
+      cell: (row) => <ShareCell share={row.display_share} />,
+      // The sum of what the rows print, not a recomputed 100: if rounding ever
+      // stopped preserving the total, this is where it would show.
+      foot: (_totals, shareTotal) => formatPercent(shareTotal),
+    },
+    countColumn(
+      'total',
+      'Tokens',
+      'Input, output, cache reads and cache writes added together.',
+      (row) => row.total_tokens,
+      (totals) => totals.total_tokens,
     ),
-    foot: () => 'Total',
-  },
-  {
-    key: DEFAULT_SORT,
-    label: 'Share',
-    title: 'Percentage of the tokens this range holds, across everyone.',
-    numeric: true,
-    sortValue: (row) => row.share_pct,
-    cell: (row) => <ShareCell share={row.display_share} />,
-    // The sum of what the rows print, not a recomputed 100: if rounding ever
-    // stopped preserving the total, this is where it would show.
-    foot: (_totals, shareTotal) => formatPercent(shareTotal),
-  },
-  countColumn(
-    'total',
-    'Tokens',
-    'Input, output, cache reads and cache writes added together.',
-    (row) => row.total_tokens,
-    (totals) => totals.total_tokens,
-  ),
-  countColumn(
-    'input',
-    'In',
-    'Input tokens.',
-    (row) => row.input_tokens,
-    (totals) => totals.input_tokens,
-  ),
-  countColumn(
-    'output',
-    'Out',
-    'Output tokens.',
-    (row) => row.output_tokens,
-    (totals) => totals.output_tokens,
-  ),
-  countColumn(
-    'cache_read',
-    'Cache read',
-    'Tokens read from the prompt cache. Cheap, but still tokens.',
-    (row) => row.cache_read_tokens,
-    (totals) => totals.cache_read_tokens,
-  ),
-  countColumn(
-    'cache_write',
-    'Cache write',
-    'Tokens written into the prompt cache.',
-    (row) => row.cache_creation_tokens,
-    (totals) => totals.cache_creation_tokens,
-  ),
-  countColumn(
-    'requests',
-    'Requests',
-    'API calls Claude Code reported.',
-    (row) => row.requests,
-    (totals) => totals.requests,
-  ),
-  countColumn(
-    'sessions',
-    'Sessions',
-    'Distinct Claude Code sessions.',
-    (row) => row.sessions,
-    (totals) => totals.sessions,
-  ),
-  {
-    key: 'cost',
-    label: <>Cost, {<Est />}</>,
-    numeric: true,
-    sortValue: (row) => row.cost_micros,
-    cell: (row) => formatCostMicros(row.cost_micros),
-    foot: (totals) => formatCostMicros(totals.cost_micros),
-  },
-];
+    {
+      key: 'trend',
+      label: 'Trend',
+      title: 'This member across the range, each sparkline scaled to its own peak.',
+      numeric: false,
+      // No order a reader would agree on: a sparkline is a shape, and sorting
+      // by its last bucket or its peak would look like sorting by the picture.
+      cell: (row) => (
+        <Sparkline
+          values={row.trend}
+          color={row.color}
+          label={describeTrend(row.display_name, row.trend, context.bucket)}
+        />
+      ),
+      foot: () => '',
+    },
+    countColumn(
+      'input',
+      'In',
+      'Input tokens.',
+      (row) => row.input_tokens,
+      (totals) => totals.input_tokens,
+    ),
+    countColumn(
+      'output',
+      'Out',
+      'Output tokens.',
+      (row) => row.output_tokens,
+      (totals) => totals.output_tokens,
+    ),
+    countColumn(
+      'cache_read',
+      'Cache read',
+      'Tokens read from the prompt cache. Cheap, but still tokens.',
+      (row) => row.cache_read_tokens,
+      (totals) => totals.cache_read_tokens,
+    ),
+    countColumn(
+      'cache_write',
+      'Cache write',
+      'Tokens written into the prompt cache.',
+      (row) => row.cache_creation_tokens,
+      (totals) => totals.cache_creation_tokens,
+    ),
+    countColumn(
+      'requests',
+      'Requests',
+      'API calls Claude Code reported.',
+      (row) => row.requests,
+      (totals) => totals.requests,
+    ),
+    countColumn(
+      'sessions',
+      'Sessions',
+      'Distinct Claude Code sessions.',
+      (row) => row.sessions,
+      (totals) => totals.sessions,
+    ),
+    {
+      key: 'cost',
+      label: <>Cost, {<Est />}</>,
+      numeric: true,
+      sortValue: (row) => row.cost_micros,
+      cell: (row) => formatCostMicros(row.cost_micros),
+      foot: (totals) => formatCostMicros(totals.cost_micros),
+    },
+  ];
+}
 
 /** `aria-sort`'s spelling of a direction. */
 function ariaSort(direction: SortDirection): 'ascending' | 'descending' {
@@ -175,31 +216,40 @@ function ariaSort(direction: SortDirection): 'ascending' | 'descending' {
  * rather than a hard-coded total, which makes the invariant visible instead of
  * assumed.
  */
-export function MemberTable({ members, totals, loading }: MemberTableProps): JSX.Element {
+export function MemberTable({
+  members,
+  totals,
+  loading,
+  trends,
+  bucket,
+  slots,
+}: MemberTableProps): JSX.Element {
   const [sortKey, setSortKey] = useState<string>(DEFAULT_SORT);
   const [direction, setDirection] = useState<SortDirection>('desc');
+
+  const columns = useMemo(() => columnsFor({ bucket }), [bucket]);
 
   const rows = useMemo<Row[]>(() => {
     const shares = roundSharesPreservingTotal(members.map((member) => member.share_pct));
     return members.map((member, index) => ({
       ...member,
       display_share: shares[index] ?? 0,
+      trend: trends.get(member.member_id) ?? [],
+      color: memberColor(member.member_id, slots),
     }));
-  }, [members]);
+  }, [members, trends, slots]);
 
   const shareTotal = useMemo(
     () => Number(rows.reduce((sum, row) => sum + row.display_share, 0).toFixed(6)),
     [rows],
   );
 
-  const column = COLUMNS.find((entry) => entry.key === sortKey) ?? COLUMNS[0];
-  const sorted = useMemo(
-    () =>
-      column === undefined
-        ? rows
-        : sortRows(rows, column.sortValue, direction, (row) => row.display_name),
-    [rows, column, direction],
-  );
+  const column = columns.find((entry) => entry.key === sortKey) ?? columns[0];
+  const sorted = useMemo(() => {
+    const sortValue = column?.sortValue;
+    if (sortValue === undefined) return rows;
+    return sortRows(rows, sortValue, direction, (row) => row.display_name);
+  }, [rows, column, direction]);
 
   function toggle(key: string): void {
     if (key === sortKey) {
@@ -209,7 +259,7 @@ export function MemberTable({ members, totals, loading }: MemberTableProps): JSX
     setSortKey(key);
     // A newly chosen column opens on its most interesting end: largest first
     // for a number, A-to-Z for a name.
-    setDirection(COLUMNS.find((entry) => entry.key === key)?.numeric === false ? 'asc' : 'desc');
+    setDirection(columns.find((entry) => entry.key === key)?.numeric === false ? 'asc' : 'desc');
   }
 
   return (
@@ -217,27 +267,35 @@ export function MemberTable({ members, totals, loading }: MemberTableProps): JSX
       <table className="data">
         <thead>
           <tr>
-            {COLUMNS.map((entry) => {
+            {columns.map((entry) => {
               const active = entry.key === sortKey;
               return (
                 <th
                   key={entry.key}
                   scope="col"
                   className={entry.numeric ? 'num' : undefined}
-                  {...(active ? { 'aria-sort': ariaSort(direction) } : {})}
+                  {...(active && entry.sortValue !== undefined
+                    ? { 'aria-sort': ariaSort(direction) }
+                    : {})}
                 >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      toggle(entry.key);
-                    }}
-                    title={entry.title}
-                  >
-                    {entry.label}
-                    <span className="sort-arrow" aria-hidden="true">
-                      {active ? (direction === 'asc' ? '▲' : '▼') : ''}
+                  {entry.sortValue === undefined ? (
+                    <span className="th-inner" title={entry.title}>
+                      {entry.label}
                     </span>
-                  </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        toggle(entry.key);
+                      }}
+                      title={entry.title}
+                    >
+                      {entry.label}
+                      <span className="sort-arrow" aria-hidden="true">
+                        {active ? (direction === 'asc' ? '▲' : '▼') : ''}
+                      </span>
+                    </button>
+                  )}
                 </th>
               );
             })}
@@ -248,7 +306,7 @@ export function MemberTable({ members, totals, loading }: MemberTableProps): JSX
           {loading && rows.length === 0
             ? Array.from({ length: SKELETON_ROWS }, (_unused, index) => (
                 <tr key={`skeleton-${String(index)}`}>
-                  {COLUMNS.map((entry) => (
+                  {columns.map((entry) => (
                     <td key={entry.key} className={entry.numeric ? 'num' : undefined}>
                       <span className="skeleton">0,000,000</span>
                     </td>
@@ -257,7 +315,7 @@ export function MemberTable({ members, totals, loading }: MemberTableProps): JSX
               ))
             : sorted.map((row) => (
                 <tr key={row.member_id}>
-                  {COLUMNS.map((entry) => (
+                  {columns.map((entry) => (
                     <td
                       key={entry.key}
                       className={
@@ -278,7 +336,7 @@ export function MemberTable({ members, totals, loading }: MemberTableProps): JSX
         {rows.length > 0 && (
           <tfoot>
             <tr>
-              {COLUMNS.map((entry) => (
+              {columns.map((entry) => (
                 <td key={entry.key} className={entry.numeric ? 'num' : undefined}>
                   {entry.foot(totals, shareTotal)}
                 </td>

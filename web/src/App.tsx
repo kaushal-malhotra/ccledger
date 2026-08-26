@@ -40,6 +40,7 @@ import {
   toQueryParams,
   tzOffsetMinutes,
 } from './lib/range.js';
+import { memberTrends } from './lib/series.js';
 import { tokenFromHash } from './lib/token.js';
 
 /** The two things the shell can show. */
@@ -50,6 +51,9 @@ const DEFAULT_CUSTOM_DAYS = 6;
 
 /** The range the dashboard opens on. */
 const DEFAULT_PRESET: RangePreset = '7d';
+
+/** No trends yet, as a stable identity so memoised children do not rerender. */
+const NO_TRENDS: ReadonlyMap<string, number[]> = new Map();
 
 /**
  * The dashboard.
@@ -214,6 +218,11 @@ export function App(): JSX.Element {
   // unchanged when it stops.
   const slots = useMemo(() => assignSlots(members ?? []), [members]);
 
+  const trends = useMemo(
+    () => (timeseries === null ? NO_TRENDS : memberTrends(timeseries)),
+    [timeseries],
+  );
+
   const emptyKind = useMemo<EmptyKind | null>(() => {
     if (summary === null || members === null) return null;
     if (summary.totals.requests > 0) return null;
@@ -352,6 +361,9 @@ export function App(): JSX.Element {
                     members={summary?.members ?? []}
                     totals={summary?.totals ?? EMPTY_TOTALS}
                     loading={loading}
+                    trends={trends}
+                    bucket={timeseries?.bucket ?? 'day'}
+                    slots={slots}
                   />
                 )}
               </section>

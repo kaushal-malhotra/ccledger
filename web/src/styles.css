@@ -945,6 +945,28 @@ pre.command {
   color: var(--ink-faint);
 }
 
+/* ------------------------------------------------------------- sparkline -- */
+
+.spark {
+  display: block;
+  width: 84px;
+  height: 22px;
+  line-height: 0;
+}
+
+.spark-flat {
+  display: flex;
+  align-items: center;
+  color: var(--ink-faint);
+  line-height: 1;
+}
+
+.member-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ------------------------------------------------------------ responsive -- */
 
 @media (max-width: 1080px) {
