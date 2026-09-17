@@ -26,6 +26,7 @@ import {
   baseUrlOfLogsEndpoint,
   readSettings,
   removeEnvKeys,
+  removeProfileAttribute,
   restoreBackup,
   tokenOfHeaders,
 } from './settings.js';
@@ -253,6 +254,30 @@ export async function runUninstall(options: UninstallOptions = {}): Promise<void
       }
       if (state?.createdSettingsFile === true && outcome.fileIsEmptyObject) {
         say('  ccledger created that file and it is now empty; it has been left in place.');
+      }
+    }
+
+    // Independent of the five keys above: OTEL_RESOURCE_ATTRIBUTES is never in
+    // `plan.keys` (it is not one of `OWNED_ENV_KEYS`, so an inferred plan never
+    // names it), and only `state.json` — never a guess — says what ccledger's
+    // own segment inside it was.
+    if (!restore && state?.resourceAttributeSegment !== undefined) {
+      const reread = readSettings(settingsPath);
+      if (reread.ok) {
+        const removal = removeProfileAttribute(
+          reread.settings,
+          state.resourceAttributeSegment,
+          state.resourceAttributeCreated === true,
+        );
+        if (removal.removed) {
+          say(
+            removal.removedKey
+              ? `  Removed OTEL_RESOURCE_ATTRIBUTES from ${settingsPath} (ccledger had created it).`
+              : `  Removed the claude_profile entry from OTEL_RESOURCE_ATTRIBUTES in ${settingsPath}.`,
+          );
+        } else if (removal.reason !== undefined && removal.reason !== 'is not set') {
+          warn(`left OTEL_RESOURCE_ATTRIBUTES in place: ${removal.reason}`);
+        }
       }
     }
 

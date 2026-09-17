@@ -23,6 +23,7 @@ import type {
   MemberDetailResponse,
   MembersResponse,
   ModelsResponse,
+  ProfilesResponse,
   RevokeResponse,
   SummaryResponse,
   TimeseriesResponse,
@@ -163,6 +164,15 @@ export function fetchModels(
   signal?: AbortSignal,
 ): Promise<ModelsResponse> {
   return getJson<ModelsResponse>('/api/models', { ...request }, token, signal);
+}
+
+/** `GET /api/profiles`. */
+export function fetchProfiles(
+  request: RangeRequest,
+  token: string,
+  signal?: AbortSignal,
+): Promise<ProfilesResponse> {
+  return getJson<ProfilesResponse>('/api/profiles', { ...request }, token, signal);
 }
 
 /** `GET /api/timeseries`. */

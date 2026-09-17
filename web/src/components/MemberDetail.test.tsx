@@ -63,6 +63,7 @@ function install(overrides: Partial<InstallInfo> & Pick<InstallInfo, 'install_id
     terminal_type: null,
     first_seen: START,
     last_seen: START + DAY,
+    profile_name: null,
     ...overrides,
   };
 }

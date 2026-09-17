@@ -16,16 +16,20 @@
  * question this project will ever get.
  */
 
+import { readdirSync } from 'node:fs';
 import { hostname, platform, release } from 'node:os';
+import { join as joinPath } from 'node:path';
 
 import { OTLP_LOGS_PATH, JOIN_PATH, MEMBER_TOKEN_PREFIX } from '../shared/constants.js';
 import { MAX_DISPLAY_NAME_LENGTH, decodeInvite, normaliseDisplayName } from '../shared/invite.js';
-import type { JoinRequestBody, JoinResponseBody } from '../shared/types.js';
-import { PACKAGE_NAME } from '../shared/version.js';
+import type { InvitePayload, JoinRequestBody, JoinResponseBody } from '../shared/types.js';
+import { NPX_TARGET } from '../shared/version.js';
+import { discoverProfiles } from './discover.js';
 import { errorTextOf, request } from './http.js';
 import { fail, maskSecrets, say, warn } from './io.js';
 import type { JsonEntry } from './jsonedit.js';
-import { resolveClientPaths } from './paths.js';
+import type { ClientPaths } from './paths.js';
+import { STATE_FILE_NAME, resolveClientPaths } from './paths.js';
 import type { Prompter } from './prompt.js';
 import { createPrompter, isAffirmative } from './prompt.js';
 import type { EnvConflict, SettingsFile } from './settings.js';
@@ -39,28 +43,39 @@ import {
   findEnvConflicts,
   formatEnvValue,
   isGroupOrWorldReadable,
+  profileAttributeConflict,
   readSettings,
+  tokenOfHeaders,
   writeEnvEntries,
+  writeProfileAttribute,
 } from './settings.js';
-import { digestValue, writeState } from './state.js';
+import type { ClientState } from './state.js';
+import { digestValue, readState, writeState } from './state.js';
 
 /**
  * The disclosure, verbatim. It is quoted rather than paraphrased on purpose:
  * people are being asked to install monitoring at a manager's request, and what
  * makes that acceptable is being able to read exactly what it does, in the same
  * words every time, before anything is written.
+ *
+ * A function rather than a constant because the profile line names the actual
+ * directory this run is about to write to, which is `~/.claude` by default but
+ * anything a teammate set `CLAUDE_CONFIG_DIR` to.
  */
-const DISCLOSURE: readonly string[] = [
-  'ccledger will send, per API request:',
-  '  model name, token counts, duration, timestamp, session id',
-  '',
-  'It will NOT send:',
-  '  prompts, responses, file contents, file paths,',
-  '  command text, or repository names',
-  '',
-  'Config written to: ~/.claude/settings.json',
-  `Remove any time with: npx ${PACKAGE_NAME} uninstall`,
-];
+function disclosureFor(paths: ClientPaths): readonly string[] {
+  return [
+    'ccledger will send, per API request:',
+    '  model name, token counts, duration, timestamp, session id',
+    `  which profile it came from (the directory name only): ${paths.profileName}`,
+    '',
+    'It will NOT send:',
+    '  prompts, responses, file contents, file paths,',
+    '  command text, or repository names',
+    '',
+    `Config written to: ${paths.settingsPath}`,
+    `Remove any time with: CLAUDE_CONFIG_DIR=${paths.claudeDir} npx ${NPX_TARGET} uninstall`,
+  ];
+}
 
 /** A valid OTLP logs payload carrying no records. Proves the token without storing a row. */
 const EMPTY_OTLP_ENVELOPE = '{"resourceLogs":[]}';
@@ -70,8 +85,13 @@ const RULE = '─'.repeat(66);
 
 /** Options for `ccledger setup`, as Commander hands them over. */
 export interface SetupOptions {
-  /** The invite string, base64url, as `ccledger invite` printed it. */
-  readonly code: string;
+  /**
+   * The invite string, base64url, as `ccledger invite` printed it. Omit it to
+   * set up a second (or third...) profile on a machine that already has one:
+   * setup then looks for an already-configured profile's token and reuses it
+   * instead of spending a new join code.
+   */
+  readonly code?: string;
   /** Display name to join under. Defaults to the one in the invite, then to a prompt. */
   readonly name?: string;
   /** Accept the disclosure without being asked. For scripted installs. */
@@ -81,6 +101,14 @@ export interface SetupOptions {
    * so that no run of this suite can reach a real `~/.claude/settings.json`.
    */
   readonly home?: string;
+  /**
+   * Overrides `CLAUDE_CONFIG_DIR` for this run. The CLI never sets it — a
+   * teammate sets the real environment variable — a test does, so a run of
+   * this suite never depends on what happens to be in the test process's env.
+   */
+  readonly configDir?: string;
+  /** Skip the end-of-run scan for sibling profiles on this machine. A test sets it. */
+  readonly skipDiscovery?: boolean;
   /** Stream the questions are read from. The CLI never sets it; a test does. */
   readonly input?: NodeJS.ReadableStream;
 }
@@ -109,7 +137,11 @@ function entriesFor(endpoint: string, token: string): readonly JsonEntry[] {
  * that is about to be written. Checking it that way is what lets the whole
  * check happen before the join code is spent.
  */
-function conflictsBeforeJoin(settings: SettingsFile, endpoint: string): readonly EnvConflict[] {
+function conflictsBeforeJoin(
+  settings: SettingsFile,
+  endpoint: string,
+  profileName: string,
+): readonly EnvConflict[] {
   const known = entriesFor(endpoint, 'x').filter((entry) => entry.key !== LOGS_HEADERS_KEY);
   const conflicts = [...findEnvConflicts(settings.env, known)];
   if (Object.hasOwn(settings.env, LOGS_HEADERS_KEY)) {
@@ -119,6 +151,8 @@ function conflictsBeforeJoin(settings: SettingsFile, endpoint: string): readonly
       wanted: 'Authorization=Bearer <the token this invite would issue>',
     });
   }
+  const profileConflict = profileAttributeConflict(settings.env, profileName);
+  if (profileConflict !== undefined) conflicts.push(profileConflict);
   return conflicts;
 }
 
@@ -232,12 +266,101 @@ async function join(endpoint: string, body: JoinRequestBody): Promise<JoinRespon
 }
 
 /** Prints the block that has to be read before anything is written. */
-function printDisclosure(settingsPath: string): void {
+function printDisclosure(paths: ClientPaths, tellsServerMachine: boolean): void {
   say();
-  for (const line of DISCLOSURE) say(line);
+  for (const line of disclosureFor(paths)) say(line);
   say();
-  say(`On this machine that file is: ${settingsPath}`);
-  say('Joining also tells the server this machine name and operating system, once.');
+  if (tellsServerMachine) {
+    say('Joining also tells the server this machine name and operating system, once.');
+    say();
+  }
+}
+
+/** A membership already set up on this machine, whose token this profile can reuse. */
+interface ReusableMembership {
+  readonly serverUrl: string;
+  readonly serverName: string;
+  readonly memberId: string;
+  readonly displayName: string;
+  readonly token: string;
+}
+
+/**
+ * Looks across every profile this machine already tracks — every
+ * `~/.ccledger/state*.json` besides this run's own — for one whose token still
+ * lives in its settings file, so a second, third, or fourth profile on the same
+ * machine can be wired up without spending another invite. The token itself is
+ * never duplicated into `state.json`; it is read back out of the other
+ * profile's settings file each time, the same file it was written into.
+ *
+ * When more than one other profile is tracked, the most recently installed one
+ * is used — an admin is free to revoke a stale membership, but silently
+ * guessing among several current ones would be worse than asking, so this
+ * picks the newest rather than the first found.
+ */
+function findReusableMembership(paths: ClientPaths): ReusableMembership | undefined {
+  let best: { readonly state: ClientState; readonly token: string } | undefined;
+
+  for (const candidate of otherStateFiles(paths)) {
+    const stateResult = readState(candidate);
+    if (!stateResult.ok || stateResult.state === undefined) continue;
+    const state = stateResult.state;
+    const settingsResult = readSettings(state.settingsPath);
+    if (!settingsResult.ok) continue;
+    const token = tokenOfHeaders(settingsResult.settings.env[LOGS_HEADERS_KEY]);
+    if (token === undefined) continue;
+    if (best === undefined || state.installedAt > best.state.installedAt) best = { state, token };
+  }
+
+  if (best === undefined) return undefined;
+  return {
+    serverUrl: best.state.serverUrl,
+    serverName: best.state.serverName ?? 'ccledger',
+    memberId: best.state.memberId,
+    displayName: best.state.displayName,
+    token: best.token,
+  };
+}
+
+/** Every `state*.json` in `~/.ccledger` besides the one this run would itself write. */
+function otherStateFiles(paths: ClientPaths): string[] {
+  let names: string[];
+  try {
+    names = readdirSync(paths.stateDir);
+  } catch {
+    return [];
+  }
+  return names
+    .filter((name) => name === STATE_FILE_NAME || name.startsWith('state-'))
+    .map((name) => joinPath(paths.stateDir, name))
+    .filter((path) => path !== paths.statePath);
+}
+
+/**
+ * Prints every other Claude Code profile found on this machine, with the exact
+ * command to track it — profile directory names are arbitrary, so a teammate
+ * cannot be expected to already know `~/.kaushal_dir` exists. Discovery is
+ * filename-only (`ccledger discover`'s own rule): it never opens a session
+ * transcript, only checks that the marker files are there.
+ */
+function printSiblingProfiles(paths: ClientPaths): void {
+  const found = discoverProfiles(paths.home).filter(
+    (profile) => profile.configDir !== paths.claudeDir,
+  );
+  if (found.length === 0) return;
+
+  say();
+  say(
+    `Found ${String(found.length)} more Claude Code profile${found.length === 1 ? '' : 's'} on this machine:`,
+  );
+  for (const profile of found) {
+    say(`  ${profile.profileName}  (${profile.configDir})`);
+  }
+  say();
+  say('Track them too, no new invite needed:');
+  for (const profile of found) {
+    say(`  CLAUDE_CONFIG_DIR=${profile.configDir} npx ${NPX_TARGET} setup`);
+  }
   say();
 }
 
@@ -252,15 +375,33 @@ function printRestartNotice(): void {
   say();
 }
 
-/** Joins a server and writes the config. Exits non-zero, having changed nothing, on refusal. */
-export async function runSetup(options: SetupOptions): Promise<void> {
-  const paths = resolveClientPaths(options.home);
+/** Where this run's identity comes from: a freshly spent invite, or a token reused from elsewhere. */
+type Source =
+  | { readonly kind: 'joined'; readonly invite: InvitePayload }
+  | { readonly kind: 'reused'; readonly membership: ReusableMembership };
 
-  const decoded = decodeInvite(options.code);
-  if (!decoded.ok) {
-    fail(`${decoded.error}. Ask your admin to send the invite again.`);
+/** Joins a server, or reuses this machine's existing one, and writes the config. */
+export async function runSetup(options: SetupOptions): Promise<void> {
+  const paths = resolveClientPaths(options.home, options.configDir);
+
+  let source: Source;
+  if (options.code !== undefined) {
+    const decoded = decodeInvite(options.code);
+    if (!decoded.ok) fail(`${decoded.error}. Ask your admin to send the invite again.`);
+    source = { kind: 'joined', invite: decoded.invite };
+  } else {
+    const membership = findReusableMembership(paths);
+    if (membership === undefined) {
+      fail(
+        'no --code was given, and no other profile on this machine is set up for ccledger yet. ' +
+          `Ask your admin for an invite, then run: npx ${NPX_TARGET} setup --code <invite>`,
+      );
+    }
+    source = { kind: 'reused', membership };
   }
-  const invite = decoded.invite;
+  const endpoint = source.kind === 'joined' ? source.invite.endpoint : source.membership.serverUrl;
+  const nameSuggestion =
+    source.kind === 'joined' ? source.invite.name : source.membership.displayName;
 
   const read = readSettings(paths.settingsPath);
   if (!read.ok) fail(read.error);
@@ -268,7 +409,7 @@ export async function runSetup(options: SetupOptions): Promise<void> {
 
   // Read-only, and before the disclosure: a conflict is not something anyone
   // should have to confirm their way into discovering.
-  const conflicts = conflictsBeforeJoin(settings, invite.endpoint);
+  const conflicts = conflictsBeforeJoin(settings, endpoint, paths.profileName);
   if (conflicts.length > 0) refuseOnConflict(settings, conflicts);
 
   // `isTTY` rather than "read stdin and see": a stdin that is a pipe nobody
@@ -279,53 +420,87 @@ export async function runSetup(options: SetupOptions): Promise<void> {
   const prompter = options.yes === true || !canAsk ? undefined : createPrompter(options.input);
   try {
     if (prompter === undefined && options.yes !== true) fail(NO_ANSWER);
-    const displayName = await resolveDisplayName(options, invite.name, prompter);
+    const displayName = await resolveDisplayName(options, nameSuggestion, prompter);
 
-    printDisclosure(paths.settingsPath);
+    printDisclosure(paths, source.kind === 'joined');
     if (prompter === undefined) {
       say('Accepted without asking, because --yes was given.');
     } else {
-      const answer = await prompter.ask(`Send this to ${invite.endpoint}? [y/N] `);
+      const question =
+        source.kind === 'joined'
+          ? `Send this to ${endpoint}? [y/N] `
+          : `Track this profile as ${displayName} on ${endpoint}, reusing the token already set up ` +
+            'on this machine? [y/N] ';
+      const answer = await prompter.ask(question);
       if (answer === undefined) fail(NO_ANSWER);
       if (!isAffirmative(answer)) fail('cancelled; nothing was changed');
     }
 
-    const machine = machineDescription();
-    const joined = await join(invite.endpoint, {
-      code: invite.code,
-      display_name: displayName,
-      hostname: machine.hostname,
-      os: machine.os,
-    });
+    let memberId: string;
+    let serverName: string;
+    let token: string;
+    if (source.kind === 'joined') {
+      const machine = machineDescription();
+      const joined = await join(endpoint, {
+        code: source.invite.code,
+        display_name: displayName,
+        hostname: machine.hostname,
+        os: machine.os,
+      });
+      memberId = joined.member_id;
+      serverName = joined.server_name;
+      token = joined.token;
+    } else {
+      memberId = source.membership.memberId;
+      serverName = source.membership.serverName;
+      token = source.membership.token;
+    }
 
-    // Re-read: between the check above and now a token was issued over the
-    // network, and the file is not this process's to assume it still owns.
+    // Re-read: between the check above and now identity may have been issued
+    // or fetched, and the file is not this process's to assume it still owns.
     const recheck = readSettings(paths.settingsPath);
-    if (!recheck.ok) fail(`${recheck.error} (your token is member ${joined.member_id})`);
-    const stillClear = conflictsBeforeJoin(recheck.settings, invite.endpoint);
+    if (!recheck.ok) fail(`${recheck.error} (your token is member ${memberId})`);
+    const stillClear = conflictsBeforeJoin(recheck.settings, endpoint, paths.profileName);
     if (stillClear.length > 0) {
       warn(`${paths.settingsPath} changed while setup was running; nothing was written`);
-      warn(`ask your admin to revoke member ${joined.member_id}, then start again`);
+      if (source.kind === 'joined')
+        warn(`ask your admin to revoke member ${memberId}, then start again`);
       refuseOnConflict(recheck.settings, stillClear);
     }
 
-    const entries = entriesFor(invite.endpoint, joined.token);
+    const entries = entriesFor(endpoint, token);
     let written;
     try {
       written = writeEnvEntries(recheck.settings, entries);
     } catch (error) {
       if (error instanceof SettingsError) {
-        warn(`ask your admin to revoke member ${joined.member_id}, then start again`);
+        if (source.kind === 'joined')
+          warn(`ask your admin to revoke member ${memberId}, then start again`);
         fail(error.message);
       }
       throw error;
     }
 
+    // Written against the just-updated file, not `recheck.settings`: the
+    // profile attribute lives in the same `env` object the five keys just
+    // landed in, and its member offsets have moved.
+    const afterEntries = readSettings(written.path);
+    if (!afterEntries.ok) fail(afterEntries.error);
+    let attribute;
+    try {
+      // `skipBackup`: `writeEnvEntries` just took the one backup this run
+      // needs, of the file before any of it touched it.
+      attribute = writeProfileAttribute(afterEntries.settings, paths.profileName, Date.now(), true);
+    } catch (error) {
+      if (error instanceof SettingsError) fail(error.message);
+      throw error;
+    }
+
     writeState(paths.statePath, {
       version: 1,
-      serverUrl: invite.endpoint,
-      serverName: joined.server_name,
-      memberId: joined.member_id,
+      serverUrl: endpoint,
+      serverName,
+      memberId,
       displayName,
       settingsPath: written.path,
       createdSettingsFile: written.createdFile,
@@ -335,25 +510,40 @@ export async function runSetup(options: SetupOptions): Promise<void> {
         entries.map((entry) => [entry.key, digestValue(entry.value)]),
       ),
       installedAt: Date.now(),
-      ...(written.backupPath !== undefined ? { backupPath: written.backupPath } : {}),
+      profileName: paths.profileName,
+      resourceAttributeSegment: attribute.segment,
+      resourceAttributeCreated: attribute.createdKey,
+      ...(attribute.backupPath !== undefined
+        ? { backupPath: attribute.backupPath }
+        : written.backupPath !== undefined
+          ? { backupPath: written.backupPath }
+          : {}),
     });
 
     say();
-    say(`Joined ${joined.server_name} as ${displayName}.`);
+    say(
+      source.kind === 'joined'
+        ? `Joined ${serverName} as ${displayName}.`
+        : `Tracking profile ${paths.profileName} as ${displayName} on ${serverName}.`,
+    );
     say();
+    say(`  profile     ${paths.profileName}  (${paths.claudeDir})`);
     say(`  config      ${written.path}`);
-    if (written.backupPath !== undefined) say(`  backup      ${written.backupPath}`);
-    say(`  ingest      ${invite.endpoint}${OTLP_LOGS_PATH}`);
+    if (attribute.backupPath !== undefined) say(`  backup      ${attribute.backupPath}`);
+    else if (written.backupPath !== undefined) say(`  backup      ${written.backupPath}`);
+    say(`  ingest      ${endpoint}${OTLP_LOGS_PATH}`);
     say(`  record      ${paths.statePath}`);
     say();
-    say('  Five keys were added under "env". Nothing else in that file was touched.');
+    say('  Five keys were added under "env", plus a `claude_profile` entry inside');
+    say('  OTEL_RESOURCE_ATTRIBUTES. Nothing else in that file was touched.');
 
     if (isGroupOrWorldReadable(recheck.settings.mode)) {
       warn(`${written.path} is readable by other users on this machine, and it now holds a token`);
     }
 
-    await verifyToken(invite.endpoint, joined.token);
+    await verifyToken(endpoint, token);
     printRestartNotice();
+    if (options.skipDiscovery !== true) printSiblingProfiles(paths);
   } finally {
     prompter?.close();
   }

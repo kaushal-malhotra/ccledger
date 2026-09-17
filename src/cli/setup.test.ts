@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { encodeInvite } from '../shared/invite.js';
 import { generateJoinCode } from '../shared/joincode.js';
-import { PACKAGE_NAME } from '../shared/version.js';
+import { NPX_TARGET } from '../shared/version.js';
 import type { ClientPaths } from './paths.js';
 import { resolveClientPaths } from './paths.js';
 import { runSetup } from './setup.js';
@@ -204,8 +204,10 @@ describe('runSetup', () => {
     expect(run.out).toContain('It will NOT send:');
     expect(run.out).toContain('  prompts, responses, file contents, file paths,');
     expect(run.out).toContain('  command text, or repository names');
-    expect(run.out).toContain('Config written to: ~/.claude/settings.json');
-    expect(run.out).toContain(`Remove any time with: npx ${PACKAGE_NAME} uninstall`);
+    expect(run.out).toContain(`Config written to: ${paths.settingsPath}`);
+    expect(run.out).toContain(
+      `Remove any time with: CLAUDE_CONFIG_DIR=${paths.claudeDir} npx ${NPX_TARGET} uninstall`,
+    );
     expect(run.err).toContain('cancelled');
     expect(readFileSync(paths.settingsPath, 'utf8')).toBe(EXISTING);
   });

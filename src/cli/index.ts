@@ -119,9 +119,17 @@ export function buildProgram(): Command {
 
   const setup = program
     .command('setup')
-    .description('join a ccledger server and configure Claude Code to report to it');
+    .description(
+      'join a ccledger server and configure Claude Code to report to it. ' +
+        'Reads CLAUDE_CONFIG_DIR the same way Claude Code does, so re-running this with a ' +
+        'different CLAUDE_CONFIG_DIR tracks another profile; omit --code on a machine that ' +
+        'already has one profile set up and it reuses that membership instead of a new invite.',
+    );
   setup
-    .requiredOption('--code <invite>', 'the invite string your admin sent you')
+    .option(
+      '--code <invite>',
+      'the invite string your admin sent you; omit to reuse an existing membership on this machine',
+    )
     .option('--name <display-name>', 'name to show on the dashboard; defaults to the invite')
     .option('-y, --yes', 'accept the disclosure without being asked, for scripted installs')
     .action(async () => {

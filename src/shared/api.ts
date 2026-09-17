@@ -213,6 +213,35 @@ export interface InstallInfo {
   readonly terminal_type: string | null;
   readonly first_seen: number;
   readonly last_seen: number;
+  /**
+   * The most recently reported `CLAUDE_CONFIG_DIR` profile for this install.
+   * Informational only, same caveat as `hostname`: Claude Code's `user.id`
+   * does not vary with the profile, so one install id can be several profiles
+   * interleaved and this shows only the last one seen. `GET /api/profiles`
+   * has the exact per-profile split.
+   */
+  readonly profile_name: string | null;
+}
+
+/** One (member, machine, profile) triple's aggregates over the range. */
+export interface ProfileUsage extends UsageTotals {
+  readonly member_id: string;
+  readonly display_name: string;
+  /** The install this profile's requests reported through in the range, if any. */
+  readonly hostname: string | null;
+  /** `CLAUDE_CONFIG_DIR`'s directory name — `.claude` is the default profile. */
+  readonly profile_name: string | null;
+  /** Latest request from this (member, hostname, profile) inside the range. */
+  readonly last_seen: number | null;
+}
+
+/** `GET /api/profiles`. */
+export interface ProfilesResponse {
+  readonly range: RangeInfo;
+  readonly filter: FilterInfo;
+  readonly totals: UsageTotals;
+  /** Heaviest first. */
+  readonly profiles: readonly ProfileUsage[];
 }
 
 /** `GET /api/members/:id`. */

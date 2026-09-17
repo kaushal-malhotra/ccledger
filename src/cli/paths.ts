@@ -10,9 +10,9 @@
  */
 
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
 
-/** Claude Code's own directory under the home directory. */
+/** Claude Code's own directory under the home directory, and the default profile's name. */
 export const CLAUDE_DIR_NAME = '.claude';
 
 /** The file that carries the config contract: the five keys ccledger owns. */
@@ -21,11 +21,19 @@ export const SETTINGS_FILE_NAME = 'settings.json';
 /** Where Claude Code writes a session's transcripts. `doctor` reads its mtimes. */
 export const PROJECTS_DIR_NAME = 'projects';
 
-/** ccledger's own directory. Holds `state.json` and nothing else. */
+/** ccledger's own directory. Holds one `state*.json` file per profile tracked here. */
 export const CCLEDGER_DIR_NAME = '.ccledger';
 
-/** The record of what setup added, so uninstall removes only that. */
+/**
+ * The record of what setup added for the default (`.claude`) profile. Kept as
+ * the bare, unsuffixed name for backward compatibility: every install made
+ * before profiles existed already has its record at this exact path, and
+ * moving it out from under existing installs would orphan them.
+ */
 export const STATE_FILE_NAME = 'state.json';
+
+/** The environment variable Claude Code itself reads to relocate `~/.claude`. */
+export const CONFIG_DIR_ENV_VAR = 'CLAUDE_CONFIG_DIR';
 
 /**
  * Prefix of a settings backup. The unix timestamp is appended, so backups sort
@@ -36,29 +44,67 @@ export const BACKUP_PREFIX = `${SETTINGS_FILE_NAME}.ccledger-backup-`;
 /** Every path the client commands use, absolute, for one home directory. */
 export interface ClientPaths {
   readonly home: string;
-  /** `~/.claude`. */
+  /** `~/.claude`, or wherever `CLAUDE_CONFIG_DIR` points this profile at. */
   readonly claudeDir: string;
-  /** `~/.claude/settings.json`. */
+  /** The basename of `claudeDir` — `.claude` for the default profile. */
+  readonly profileName: string;
+  /** `<claudeDir>/settings.json`. */
   readonly settingsPath: string;
-  /** `~/.claude/projects`. May not exist until Claude Code has run once. */
+  /** `<claudeDir>/projects`. May not exist until Claude Code has run once. */
   readonly projectsDir: string;
-  /** `~/.ccledger`. */
+  /** `~/.ccledger`. Shared by every profile on this machine. */
   readonly stateDir: string;
-  /** `~/.ccledger/state.json`. */
+  /**
+   * `~/.ccledger/state.json` for the default profile, `~/.ccledger/state-<profile>.json`
+   * for any other, so each profile's install is undone independently and
+   * `removeStateDirectory` only clears `~/.ccledger` once every profile is gone.
+   */
   readonly statePath: string;
 }
 
-/** Resolves every client path from a home directory, `os.homedir()` by default. */
-export function resolveClientPaths(home: string = homedir()): ClientPaths {
-  const claudeDir = join(home, CLAUDE_DIR_NAME);
+/**
+ * Expands a leading `~` against `home` and resolves a relative path against the
+ * current working directory — the same handling a shell gives `CLAUDE_CONFIG_DIR`
+ * before Node ever sees it, applied again here for the callers (a script, a
+ * different shell) that pass the value through unexpanded.
+ */
+export function resolveConfigDirValue(value: string, home: string): string {
+  const trimmed = value.trim();
+  if (trimmed === '~') return home;
+  if (trimmed.startsWith('~/') || trimmed.startsWith('~\\')) {
+    return join(home, trimmed.slice(2));
+  }
+  return isAbsolute(trimmed) ? trimmed : resolve(trimmed);
+}
+
+/**
+ * Resolves every client path from a home directory, `os.homedir()` by default,
+ * and a Claude Code config directory override — `CLAUDE_CONFIG_DIR` by default,
+ * mirroring exactly what Claude Code itself honours, so a teammate who runs
+ * `CLAUDE_CONFIG_DIR=~/.claude-work ccledger setup` gets that profile wired up
+ * without a ccledger-specific flag to learn.
+ */
+export function resolveClientPaths(
+  home: string = homedir(),
+  configDir: string | undefined = process.env[CONFIG_DIR_ENV_VAR],
+): ClientPaths {
+  const trimmed = configDir?.trim();
+  const claudeDir =
+    trimmed === undefined || trimmed === ''
+      ? join(home, CLAUDE_DIR_NAME)
+      : resolveConfigDirValue(trimmed, home);
+  const profileName = basename(claudeDir) || CLAUDE_DIR_NAME;
   const stateDir = join(home, CCLEDGER_DIR_NAME);
+  const stateFileName =
+    profileName === CLAUDE_DIR_NAME ? STATE_FILE_NAME : `state-${profileName}.json`;
   return {
     home,
     claudeDir,
+    profileName,
     settingsPath: join(claudeDir, SETTINGS_FILE_NAME),
     projectsDir: join(claudeDir, PROJECTS_DIR_NAME),
     stateDir,
-    statePath: join(stateDir, STATE_FILE_NAME),
+    statePath: join(stateDir, stateFileName),
   };
 }
 

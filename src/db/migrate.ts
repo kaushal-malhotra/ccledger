@@ -124,6 +124,24 @@ export const MIGRATIONS: readonly Migration[] = [
       addColumn(db, 'alert_fires', 'attempts', 'INTEGER NOT NULL DEFAULT 0');
     },
   },
+  {
+    version: 5,
+    name: 'claude-profiles',
+    up: (db) => {
+      // Not on `installs`: Claude Code's `user.id` does not vary with
+      // `CLAUDE_CONFIG_DIR`, so one install row can genuinely be several
+      // profiles interleaved, and a single mutable column there would only
+      // ever hold whichever profile reported most recently — silently losing
+      // the others. `requests.profile_name` is set once per row, from the
+      // event that produced it, so grouping by it is exact rather than a
+      // last-writer-wins guess. The column on `installs` is kept anyway, as
+      // purely informational "most recently seen" context alongside hostname,
+      // which already carries the same caveat for a machine that moved.
+      addColumn(db, 'requests', 'profile_name', 'TEXT');
+      addColumn(db, 'installs', 'profile_name', 'TEXT');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_requests_profile ON requests (profile_name)');
+    },
+  },
 ];
 
 /** Highest version this build knows how to apply. */

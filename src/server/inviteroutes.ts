@@ -30,7 +30,7 @@ import {
   normaliseDisplayName,
   normaliseEndpoint,
 } from '../shared/invite.js';
-import { PACKAGE_NAME } from '../shared/version.js';
+import { NPX_TARGET } from '../shared/version.js';
 import { JSON_CONTENT_TYPE, fail } from './reply.js';
 
 /** Body schema for `POST /api/invites`. */
@@ -128,7 +128,7 @@ export function registerInviteRoutes(app: FastifyInstance, db: Database.Database
         expires_at: joinCode.expiresAt,
         endpoint,
         invite,
-        command: `npx ${PACKAGE_NAME} setup --code ${invite}`,
+        command: `npx ${NPX_TARGET} setup --code ${invite}`,
       };
       reply.code(201).type(JSON_CONTENT_TYPE).send(body);
     },

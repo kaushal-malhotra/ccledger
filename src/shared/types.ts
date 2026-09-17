@@ -21,6 +21,14 @@ export interface ResourceInfo {
   readonly serviceName?: string;
   /** `service.version` — the Claude Code version. Schema-drift early warning. */
   readonly serviceVersion?: string;
+  /**
+   * `claude_profile` — not a Claude Code attribute, but a `ccledger setup`
+   * one: `user.id` does not vary with `CLAUDE_CONFIG_DIR`, so distinguishing
+   * one profile's telemetry from another's needs a label Claude Code actually
+   * transmits, and `OTEL_RESOURCE_ATTRIBUTES` is the documented way to add
+   * one. Absent on any install set up before profiles existed.
+   */
+  readonly claudeProfile?: string;
 }
 
 /** Which field the event timestamp was taken from, most trusted first. */
@@ -140,6 +148,8 @@ export interface RequestRow {
   readonly query_source: string | null;
   readonly speed: string | null;
   readonly effort: string | null;
+  /** Which `CLAUDE_CONFIG_DIR` profile this request was reported from, if known. */
+  readonly profile_name: string | null;
 }
 
 /** What one ingest call did, for the response body and for logging. */

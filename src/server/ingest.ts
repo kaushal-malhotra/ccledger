@@ -41,8 +41,8 @@ const INSERT_REQUEST_SQL = `
 INSERT OR IGNORE INTO requests (
   id, ts, member_id, install_id, session_id, prompt_id, model, model_family,
   input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens,
-  cost_micros, duration_ms, query_source, speed, effort
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  cost_micros, duration_ms, query_source, speed, effort, profile_name
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 /**
@@ -61,8 +61,8 @@ INSERT OR IGNORE INTO requests (
 const UPSERT_INSTALL_SQL = `
 INSERT INTO installs (
   id, member_id, hostname, os_type, os_version, arch, cc_version, terminal_type,
-  first_seen, last_seen
-) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+  first_seen, last_seen, profile_name
+) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   member_id     = excluded.member_id,
   hostname      = COALESCE(excluded.hostname, installs.hostname),
@@ -71,6 +71,11 @@ ON CONFLICT(id) DO UPDATE SET
   arch          = COALESCE(excluded.arch, installs.arch),
   cc_version    = COALESCE(excluded.cc_version, installs.cc_version),
   terminal_type = COALESCE(excluded.terminal_type, installs.terminal_type),
+  -- Last-writer-wins, deliberately unlike every column above: when one
+  -- install id genuinely reports under several profiles, "most recently
+  -- seen" is the only honest single-column summary, and callers wanting the
+  -- exact per-profile split use requests.profile_name instead.
+  profile_name  = COALESCE(excluded.profile_name, installs.profile_name),
   first_seen    = min(installs.first_seen, excluded.first_seen),
   last_seen     = max(installs.last_seen, excluded.last_seen)
 `;
@@ -161,6 +166,7 @@ export function ingestEvents(
           orNull(event.terminalType),
           seenAt,
           seenAt,
+          orNull(event.resource.claudeProfile),
         );
         installsTouched.add(event.userId);
       }
@@ -194,6 +200,7 @@ export function ingestEvents(
         orNull(event.querySource),
         orNull(event.speed),
         orNull(event.effort),
+        orNull(event.resource.claudeProfile),
       );
 
       // 0 changes means the id was already present — a redelivery, not an error.

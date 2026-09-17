@@ -40,6 +40,7 @@ import {
   memberList,
   memberUsageInRange,
   modelUsageInRange,
+  profileUsageInRange,
   sessionUsageInRange,
   sourceUsageInRange,
   timeseriesInRange,
@@ -53,6 +54,7 @@ import type {
   MemberDetailResponse,
   MembersResponse,
   ModelsResponse,
+  ProfilesResponse,
   RangeInfo,
   RevokeResponse,
   SourceGroup,
@@ -313,6 +315,26 @@ export function registerApiRoutes(app: FastifyInstance, db: Database.Database): 
         filter: info,
         totals: totalsInRange(db, resolved.range, filter),
         models: modelUsageInRange(db, resolved.range, filter),
+      };
+      reply.code(200).type(JSON_CONTENT_TYPE).send(body);
+    },
+  );
+
+  app.get<{ Querystring: RangeQuery }>(
+    `${ADMIN_API_PREFIX}/profiles`,
+    { schema: { querystring: RANGE_QUERY_SCHEMA } },
+    (request, reply) => {
+      const resolved = resolveRange(request.query, Date.now());
+      if (!resolved.ok) {
+        fail(reply, 400, resolved.error);
+        return;
+      }
+      const { filter, info } = resolveFilter(request.query);
+      const body: ProfilesResponse = {
+        range: resolved.info,
+        filter: info,
+        totals: totalsInRange(db, resolved.range, filter),
+        profiles: profileUsageInRange(db, resolved.range, filter),
       };
       reply.code(200).type(JSON_CONTENT_TYPE).send(body);
     },

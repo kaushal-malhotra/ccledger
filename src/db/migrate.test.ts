@@ -56,6 +56,7 @@ const REQUESTS_COLUMNS = [
   'query_source',
   'speed',
   'effort',
+  'profile_name',
 ];
 
 const LATEST_VERSION = MIGRATIONS.reduce((max, migration) => Math.max(max, migration.version), 0);

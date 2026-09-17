@@ -65,3 +65,22 @@ export const VERSION: string = stringField(MANIFEST, 'version') ?? UNKNOWN_VERSI
  * `npm publish` actually uploaded.
  */
 export const PACKAGE_NAME: string = stringField(MANIFEST, 'name') ?? FALLBACK_PACKAGE_NAME;
+
+/** The `ccledger` field of `package.json`, if it has one. */
+function ccledgerConfig(): Readonly<Record<string, unknown>> | undefined {
+  const value = MANIFEST?.ccledger;
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+/**
+ * What `ccledger invite` tells a teammate to `npx` — `PACKAGE_NAME` unless
+ * `package.json` sets `ccledger.npxTarget`, which a checkout running from a
+ * fork not published to npm sets instead (e.g. `github:you/ccledger`, which
+ * `npx` clones and builds directly). Read from the manifest rather than an
+ * environment variable so the setting travels with the checkout — every
+ * machine that runs `ccledger serve` from it prints the same line, with
+ * nothing to remember to set on each one.
+ */
+export const NPX_TARGET: string = stringField(ccledgerConfig(), 'npxTarget') ?? PACKAGE_NAME;

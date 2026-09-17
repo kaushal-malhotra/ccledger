@@ -207,12 +207,14 @@ function toResourceInfo(attributes: ReadonlyMap<string, AttributeValue>): Resour
   const osVersion = toStr(attributes.get('os.version'));
   const serviceName = toStr(attributes.get('service.name'));
   const serviceVersion = toStr(attributes.get('service.version'));
+  const claudeProfile = toStr(attributes.get('claude_profile'));
   return {
     ...(hostArch !== undefined ? { hostArch } : {}),
     ...(osType !== undefined ? { osType } : {}),
     ...(osVersion !== undefined ? { osVersion } : {}),
     ...(serviceName !== undefined ? { serviceName } : {}),
     ...(serviceVersion !== undefined ? { serviceVersion } : {}),
+    ...(claudeProfile !== undefined ? { claudeProfile } : {}),
   };
 }
 

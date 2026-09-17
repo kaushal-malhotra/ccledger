@@ -24,6 +24,7 @@ import { setConfig } from '../db/config.js';
 import { CONFIG_PUBLIC_URL } from '../shared/constants.js';
 import { decodeInvite } from '../shared/invite.js';
 import type { InviteResponse, InvitesResponse } from '../shared/api.js';
+import { NPX_TARGET } from '../shared/version.js';
 
 /** The endpoint a server that has booted once would have recorded. */
 const ENDPOINT = 'https://ccledger.example.com';
@@ -88,7 +89,7 @@ describe('POST /api/invites', () => {
     expect(decoded.invite.name).toBe('Alice Chen');
   });
 
-  it('puts the published package name in the command, not the binary name', async () => {
+  it('puts the npx target in the command, not the binary name', async () => {
     const { app, headers } = harness();
     const response = await app.inject({
       method: 'POST',
@@ -99,9 +100,10 @@ describe('POST /api/invites', () => {
     const body = JSON.parse(response.body) as InviteResponse;
 
     // `npx ccledger` resolves to a different author's package. This line is
-    // pasted into a terminal unread, so the name in it has to be the one this
-    // build was published under.
-    expect(body.command).toContain('@thisissbk/ccledger');
+    // pasted into a terminal unread, so the name in it has to be
+    // `NPX_TARGET` — the published package name, unless `package.json` points
+    // `npx` at a git fork instead.
+    expect(body.command).toContain(NPX_TARGET);
     expect(body.command).toContain(body.invite);
     expect(body.command.startsWith('npx ')).toBe(true);
   });

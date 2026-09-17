@@ -205,8 +205,9 @@ describe('invite options', () => {
 });
 
 describe('client command options', () => {
-  it('requires an invite for setup, because there is nothing to join without one', () => {
-    expect(() => parseCommand('setup', ['setup'])).toThrow();
+  it("lets setup run with no --code, for reusing an existing profile's membership", () => {
+    const options = parseCommand('setup', ['setup']);
+    expect(options['code']).toBeUndefined();
   });
 
   it('takes the invite, a name and the non-interactive flag', () => {

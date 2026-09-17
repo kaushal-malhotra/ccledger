@@ -24,14 +24,21 @@ import {
   LOGS_EXPORTER_KEY,
   LOGS_HEADERS_KEY,
   LOGS_PROTOCOL_KEY,
+  PROFILE_ATTRIBUTE_KEY,
+  RESOURCE_ATTRIBUTES_KEY,
   SettingsError,
   TELEMETRY_ENABLED_KEY,
   findContentLogging,
   findEnvConflicts,
   isTruthyFlag,
+  parseResourceAttributes,
+  profileAttributeConflict,
   readSettings,
   removeEnvKeys,
+  removeProfileAttribute,
+  serializeResourceAttributes,
   writeEnvEntries,
+  writeProfileAttribute,
 } from './settings.js';
 import { digestValue } from './state.js';
 
@@ -368,6 +375,164 @@ describe('removeEnvKeys', () => {
 
     expect(outcome.removedEnv).toBe(true);
     expect(outcome.fileIsEmptyObject).toBe(true);
+  });
+});
+
+describe('parseResourceAttributes and serializeResourceAttributes', () => {
+  it('round-trips comma-separated key=value pairs in order', () => {
+    const pairs = parseResourceAttributes('department=eng,team.id=platform');
+
+    expect([...pairs]).toEqual([
+      ['department', 'eng'],
+      ['team.id', 'platform'],
+    ]);
+    expect(serializeResourceAttributes(pairs)).toBe('department=eng,team.id=platform');
+  });
+
+  it('skips a segment with no "=" and an empty one from a trailing comma', () => {
+    expect([...parseResourceAttributes('a=1,garbage,,b=2')]).toEqual([
+      ['a', '1'],
+      ['b', '2'],
+    ]);
+  });
+
+  it('trims whitespace around keys and values', () => {
+    expect([...parseResourceAttributes(' a = 1 , b=2')]).toEqual([
+      ['a', '1'],
+      ['b', '2'],
+    ]);
+  });
+});
+
+describe('profileAttributeConflict', () => {
+  it('reports no conflict when the key is absent', () => {
+    expect(profileAttributeConflict({}, '.claude-work')).toBeUndefined();
+  });
+
+  it('reports no conflict when it already holds exactly the pair being written', () => {
+    const env = { [RESOURCE_ATTRIBUTES_KEY]: 'claude_profile=.claude-work' };
+    expect(profileAttributeConflict(env, '.claude-work')).toBeUndefined();
+  });
+
+  it('reports a conflict when claude_profile already names a different profile', () => {
+    const env = { [RESOURCE_ATTRIBUTES_KEY]: 'department=eng,claude_profile=.claude' };
+    const conflict = profileAttributeConflict(env, '.claude-work');
+    expect(conflict?.current).toBe('.claude');
+    expect(conflict?.wanted).toBe('.claude-work');
+  });
+
+  it('reports a conflict when the whole value is not a string', () => {
+    const env = { [RESOURCE_ATTRIBUTES_KEY]: 42 };
+    expect(profileAttributeConflict(env, '.claude-work')).toBeDefined();
+  });
+});
+
+describe('writeProfileAttribute and removeProfileAttribute', () => {
+  it('adds the key fresh when it is absent, and removes it whole on the way out', () => {
+    const paths = tempHome();
+    writeSettingsFile(paths, REALISTIC_SETTINGS);
+    const before = readSettings(paths.settingsPath);
+    expect(before.ok).toBe(true);
+    if (!before.ok) return;
+
+    const outcome = writeProfileAttribute(before.settings, '.claude-work');
+    expect(outcome.createdKey).toBe(true);
+    expect(outcome.segment).toBe(`${PROFILE_ATTRIBUTE_KEY}=.claude-work`);
+
+    const written = readSettings(paths.settingsPath);
+    expect(written.ok).toBe(true);
+    if (!written.ok) return;
+    expect(written.settings.env[RESOURCE_ATTRIBUTES_KEY]).toBe('claude_profile=.claude-work');
+
+    const removal = removeProfileAttribute(written.settings, outcome.segment, outcome.createdKey);
+    expect(removal.removed).toBe(true);
+    expect(removal.removedKey).toBe(true);
+
+    const after = readSettings(paths.settingsPath);
+    expect(after.ok).toBe(true);
+    if (!after.ok) return;
+    expect(Object.hasOwn(after.settings.env, RESOURCE_ATTRIBUTES_KEY)).toBe(false);
+    // Every key ccledger did not touch survives byte for byte.
+    for (const key of ['model', 'permissions', 'hooks', 'statusLine']) {
+      expect((after.settings.root as Record<string, unknown>)[key]).toEqual(
+        (JSON.parse(REALISTIC_SETTINGS) as Record<string, unknown>)[key],
+      );
+    }
+  });
+
+  it('merges into an existing value, leaving every other pair untouched', () => {
+    const paths = tempHome();
+    writeSettingsFile(
+      paths,
+      JSON.stringify({ env: { [RESOURCE_ATTRIBUTES_KEY]: 'department=eng,team.id=platform' } }),
+    );
+    const before = readSettings(paths.settingsPath);
+    expect(before.ok).toBe(true);
+    if (!before.ok) return;
+
+    const outcome = writeProfileAttribute(before.settings, '.claude-work');
+    expect(outcome.createdKey).toBe(false);
+
+    const written = readSettings(paths.settingsPath);
+    expect(written.ok).toBe(true);
+    if (!written.ok) return;
+    expect(written.settings.env[RESOURCE_ATTRIBUTES_KEY]).toBe(
+      'department=eng,team.id=platform,claude_profile=.claude-work',
+    );
+
+    const removal = removeProfileAttribute(written.settings, outcome.segment, false);
+    expect(removal.removed).toBe(true);
+    expect(removal.removedKey).toBe(false);
+
+    const after = readSettings(paths.settingsPath);
+    expect(after.ok).toBe(true);
+    if (!after.ok) return;
+    expect(after.settings.env[RESOURCE_ATTRIBUTES_KEY]).toBe('department=eng,team.id=platform');
+  });
+
+  it('throws rather than overwrite a conflicting claude_profile', () => {
+    const paths = tempHome();
+    writeSettingsFile(
+      paths,
+      JSON.stringify({ env: { [RESOURCE_ATTRIBUTES_KEY]: 'claude_profile=.claude-personal' } }),
+    );
+    const before = readSettings(paths.settingsPath);
+    expect(before.ok).toBe(true);
+    if (!before.ok) return;
+
+    expect(() => writeProfileAttribute(before.settings, '.claude-work')).toThrow(SettingsError);
+  });
+
+  it('leaves the pair alone on removal when it has changed since ccledger wrote it', () => {
+    const paths = tempHome();
+    writeSettingsFile(
+      paths,
+      JSON.stringify({ env: { [RESOURCE_ATTRIBUTES_KEY]: 'claude_profile=.something-else' } }),
+    );
+    const settings = readSettings(paths.settingsPath);
+    expect(settings.ok).toBe(true);
+    if (!settings.ok) return;
+
+    const removal = removeProfileAttribute(settings.settings, 'claude_profile=.claude-work', false);
+    expect(removal.removed).toBe(false);
+    expect(removal.reason).toContain('changed since');
+
+    const after = readSettings(paths.settingsPath);
+    expect(after.ok).toBe(true);
+    if (!after.ok) return;
+    expect(after.settings.env[RESOURCE_ATTRIBUTES_KEY]).toBe('claude_profile=.something-else');
+  });
+
+  it('skips its own backup and takes none when skipBackup is set on a fresh key', () => {
+    const paths = tempHome();
+    writeSettingsFile(paths, REALISTIC_SETTINGS);
+    const before = readSettings(paths.settingsPath);
+    expect(before.ok).toBe(true);
+    if (!before.ok) return;
+
+    writeProfileAttribute(before.settings, '.claude-work', Date.now(), true);
+
+    expect(backupsIn(paths.claudeDir)).toEqual([]);
   });
 });
 

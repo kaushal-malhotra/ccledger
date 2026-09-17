@@ -15,7 +15,7 @@ import { getConfig } from '../db/config.js';
 import { createJoinCodeStore } from '../db/joincodes.js';
 import { CONFIG_PUBLIC_URL, JOIN_CODE_TTL_MS } from '../shared/constants.js';
 import { encodeInvite, normaliseDisplayName, normaliseEndpoint } from '../shared/invite.js';
-import { PACKAGE_NAME } from '../shared/version.js';
+import { NPX_TARGET } from '../shared/version.js';
 import { openMigratedDatabase } from './database.js';
 import { fail, say, warn } from './io.js';
 
@@ -72,7 +72,7 @@ export function runInvite(rawName: string, options: InviteOptions): void {
     say();
     say('Send them this line:');
     say();
-    say(`  npx ${PACKAGE_NAME} setup --code ${invite}`);
+    say(`  npx ${NPX_TARGET} setup --code ${invite}`);
     say();
     say(`The code works once and expires in ${String(TTL_HOURS)} hours.`);
 

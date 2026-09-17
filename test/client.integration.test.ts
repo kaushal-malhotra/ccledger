@@ -27,7 +27,7 @@ import { runDoctor } from '../src/cli/doctor.js';
 import { runInvite } from '../src/cli/invite.js';
 import type { ClientPaths } from '../src/cli/paths.js';
 import { resolveClientPaths } from '../src/cli/paths.js';
-import { OWNED_ENV_KEYS, tokenOfHeaders } from '../src/cli/settings.js';
+import { OWNED_ENV_KEYS, RESOURCE_ATTRIBUTES_KEY, tokenOfHeaders } from '../src/cli/settings.js';
 import { runSetup } from '../src/cli/setup.js';
 import { readState } from '../src/cli/state.js';
 import { runUninstall } from '../src/cli/uninstall.js';
@@ -168,7 +168,8 @@ describe('a teammate joining, reporting and leaving', () => {
 
     const installed = readFileSync(paths.settingsPath, 'utf8');
     const env = envOf(paths.settingsPath);
-    expect(Object.keys(env)).toEqual(['EDITOR', ...OWNED_ENV_KEYS]);
+    expect(Object.keys(env)).toEqual(['EDITOR', ...OWNED_ENV_KEYS, RESOURCE_ATTRIBUTES_KEY]);
+    expect(env[RESOURCE_ATTRIBUTES_KEY]).toBe('claude_profile=.claude');
     expect(env.EDITOR).toBe('vim');
     expect(env.CLAUDE_CODE_ENABLE_TELEMETRY).toBe('1');
     expect(env.OTEL_LOGS_EXPORTER).toBe('otlp');
@@ -266,7 +267,7 @@ describe('a teammate joining, reporting and leaving', () => {
     await capture(() => runSetup({ code, yes: true, home: paths.home }));
 
     const env = envOf(paths.settingsPath);
-    expect(Object.keys(env)).toEqual([...OWNED_ENV_KEYS]);
+    expect(Object.keys(env)).toEqual([...OWNED_ENV_KEYS, RESOURCE_ATTRIBUTES_KEY]);
     const state = readState(paths.statePath);
     if (!state.ok || state.state === undefined) throw new Error('no state was written');
     expect(state.state.createdSettingsFile).toBe(true);

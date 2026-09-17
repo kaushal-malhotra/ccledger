@@ -10,6 +10,7 @@ import type {
   MemberDetailResponse,
   MemberListEntry,
   ModelsResponse,
+  ProfilesResponse,
   SummaryResponse,
   TimeseriesResponse,
 } from '../../src/shared/api.js';
@@ -24,6 +25,7 @@ import {
   fetchMemberDetail,
   fetchMembers,
   fetchModels,
+  fetchProfiles,
   fetchSummary,
   fetchTimeseries,
   isAuthFailure,
@@ -39,6 +41,7 @@ import { MemberTable } from './components/MemberTable.js';
 import { InvitePanel } from './components/InvitePanel.js';
 import { MembersView } from './components/MembersView.js';
 import { ModelBars } from './components/ModelBars.js';
+import { ProfilesTable } from './components/ProfilesTable.js';
 import { StatTiles } from './components/StatTiles.js';
 import { TokenGate } from './components/TokenGate.js';
 import { TokensOverTime } from './components/TokensOverTime.js';
@@ -66,8 +69,8 @@ import {
   tokenFromHash,
 } from './lib/token.js';
 
-/** The three things the shell can show. */
-type View = 'usage' | 'members' | 'settings';
+/** The things the shell can show. */
+type View = 'usage' | 'profiles' | 'members' | 'settings';
 
 /** Days the custom picker opens on, matching the default preset. */
 const DEFAULT_CUSTOM_DAYS = 6;
@@ -124,6 +127,7 @@ export function App(): JSX.Element {
   const [members, setMembers] = useState<readonly MemberListEntry[] | null>(null);
   const [timeseries, setTimeseries] = useState<TimeseriesResponse | null>(null);
   const [models, setModels] = useState<ModelsResponse | null>(null);
+  const [profiles, setProfiles] = useState<ProfilesResponse | null>(null);
   const [alerts, setAlerts] = useState<AlertsResponse | null>(null);
   const [detail, setDetail] = useState<MemberDetailResponse | null>(null);
   const [invites, setInvites] = useState<InvitesResponse | null>(null);
@@ -176,6 +180,7 @@ export function App(): JSX.Element {
       setMembers(null);
       setTimeseries(null);
       setModels(null);
+      setProfiles(null);
       setAlerts(null);
       setDetail(null);
       setTokenError(messageOf(cause));
@@ -217,16 +222,18 @@ export function App(): JSX.Element {
         controller.signal,
       ),
       fetchModels(request, token, controller.signal),
+      fetchProfiles(request, token, controller.signal),
       // Unranged, like `/api/members`: what it answers is about the current day
       // and week, not about the range the picker is on. It rides along with the
       // rest so the badge on a row and the numbers beside it come from one load.
       fetchAlerts(token, controller.signal),
     ])
-      .then(([summaryBody, membersBody, timeseriesBody, modelsBody, alertsBody]) => {
+      .then(([summaryBody, membersBody, timeseriesBody, modelsBody, profilesBody, alertsBody]) => {
         setSummary(summaryBody);
         setMembers(membersBody.members);
         setTimeseries(timeseriesBody);
         setModels(modelsBody);
+        setProfiles(profilesBody);
         setAlerts(alertsBody);
         setError(null);
       })
@@ -420,6 +427,15 @@ export function App(): JSX.Element {
               </button>
               <button
                 type="button"
+                aria-pressed={view === 'profiles' && selected === null}
+                onClick={() => {
+                  chooseView('profiles');
+                }}
+              >
+                Profiles
+              </button>
+              <button
+                type="button"
                 aria-pressed={view === 'members' && selected === null}
                 onClick={() => {
                   chooseView('members');
@@ -448,6 +464,7 @@ export function App(): JSX.Element {
                 setMembers(null);
                 setTimeseries(null);
                 setModels(null);
+                setProfiles(null);
                 setAlerts(null);
                 setDetail(null);
                 setTokenError(null);
@@ -474,7 +491,7 @@ export function App(): JSX.Element {
             sources={summary?.sources ?? []}
             onRefresh={refresh}
             loading={loading}
-            ranged={view === 'usage' || selected !== null}
+            ranged={view === 'usage' || view === 'profiles' || selected !== null}
           />
 
           {error !== null && (
@@ -546,6 +563,39 @@ export function App(): JSX.Element {
                 )}
               </section>
             </>
+          ) : view === 'profiles' ? (
+            <section className="section">
+              <div className="section-head">
+                <h2>Claude Code profiles</h2>
+                <span className="section-note">
+                  {range === undefined
+                    ? 'no range selected'
+                    : formatRangeLabel(range.from, range.to)}
+                  {' · local telemetry, not Anthropic’s account-level quota'}
+                </span>
+              </div>
+
+              {profiles !== null &&
+              profiles.profiles.length === 0 &&
+              summary?.totals.requests === 0 ? (
+                <EmptyState
+                  kind={emptyKind ?? 'no-usage'}
+                  onResetFilter={() => {
+                    setSelection(ALL_ACTIVITY);
+                  }}
+                  onWidenRange={() => {
+                    choosePreset('30d');
+                  }}
+                />
+              ) : (
+                <ProfilesTable
+                  profiles={profiles?.profiles ?? null}
+                  totals={profiles?.totals ?? EMPTY_TOTALS}
+                  loading={loading}
+                  now={asOf}
+                />
+              )}
+            </section>
           ) : view === 'members' ? (
             <section className="section">
               <div className="section-head">

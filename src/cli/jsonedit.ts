@@ -310,6 +310,19 @@ function separatorAfterComma(
 }
 
 /**
+ * Replaces one member's string value in place and returns the new text.
+ *
+ * Only the value's own span moves; the key, its quoting, and everything around
+ * the member is untouched. That is what lets this be used on a key ccledger
+ * does not own outright — `OTEL_RESOURCE_ATTRIBUTES` may hold a value a
+ * teammate's own OTEL setup wrote, and this changes only the characters between
+ * its quotes, not the member's position or the rest of the document.
+ */
+export function replaceMemberValue(text: string, member: JsonMemberSpan, value: string): string {
+  return text.slice(0, member.valueStart) + JSON.stringify(value) + text.slice(member.valueEnd);
+}
+
+/**
  * Removes members by key and returns the new text.
  *
  * The interior is rebuilt from the source spans of the members that survive —

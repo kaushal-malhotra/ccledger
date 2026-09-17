@@ -32,6 +32,7 @@ import type {
   MemberListEntry,
   MemberUsage,
   ModelUsage,
+  ProfileUsage,
   SessionUsage,
   SourceGroup,
   SourceUsage,
@@ -471,10 +472,46 @@ export function installsOfMember(db: Database.Database, memberId: string): Insta
       `SELECT
          id AS install_id,
          hostname, os_type, os_version, arch, cc_version, terminal_type,
-         first_seen, last_seen
+         first_seen, last_seen, profile_name
        FROM installs
        WHERE member_id = @memberId
        ORDER BY last_seen DESC, id ASC`,
     )
     .all({ memberId });
+}
+
+/**
+ * Per-(member, machine, profile) aggregates for the range, heaviest first.
+ *
+ * Grouped by `requests.profile_name` rather than `installs.profile_name`:
+ * `user.id` (`installs.id`) does not vary with `CLAUDE_CONFIG_DIR`, so one
+ * install can genuinely carry several profiles' requests, and only the
+ * per-event column can split them apart exactly. `hostname` is joined in from
+ * `installs` for display — it is the one piece of machine identity OTLP
+ * carries — so it can still collide two profiles from the same machine into
+ * one display row only if `installs.hostname` itself changed mid-range, the
+ * same caveat every other `hostname` column in this file already has.
+ */
+export function profileUsageInRange(
+  db: Database.Database,
+  range: UsageRange,
+  filter: SourceFilter,
+): ProfileUsage[] {
+  const predicate = sourcePredicate(filter);
+  return db
+    .prepare<Params, ProfileUsage>(
+      `SELECT
+         m.id AS member_id,
+         m.display_name AS display_name,
+         i.hostname AS hostname,
+         r.profile_name AS profile_name,
+         max(r.ts) AS last_seen,${USAGE_AGGREGATES}
+       FROM requests r
+       JOIN members m ON m.id = r.member_id
+       LEFT JOIN installs i ON i.id = r.install_id
+       WHERE r.ts >= @from AND r.ts < @to${predicate.sql}
+       GROUP BY m.id, m.display_name, i.hostname, r.profile_name
+       ORDER BY total_tokens DESC, m.display_name COLLATE NOCASE ASC`,
+    )
+    .all({ ...rangeParams(range), ...predicate.params });
 }

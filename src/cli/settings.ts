@@ -25,6 +25,7 @@ import {
   appendObjectMember,
   findMember,
   removeMembers,
+  replaceMemberValue,
   scanJsonDocument,
 } from './jsonedit.js';
 import { backupPathFor } from './paths.js';
@@ -61,6 +62,26 @@ export const OWNED_ENV_KEYS: readonly string[] = [
   LOGS_ENDPOINT_KEY,
   LOGS_HEADERS_KEY,
 ];
+
+/**
+ * The env key Claude Code reads for arbitrary OTLP resource labels
+ * (`department=eng,team.id=platform`, per Claude Code's own docs). Unlike the
+ * five keys above, ccledger does not own this key outright — a teammate may
+ * already export their own labels through it — so it is never in
+ * `OWNED_ENV_KEYS` and never whole-value conflict-checked or blindly appended.
+ * ccledger only ever adds, changes, or removes its own `claude_profile=`
+ * segment inside whatever value is already there.
+ */
+export const RESOURCE_ATTRIBUTES_KEY = 'OTEL_RESOURCE_ATTRIBUTES';
+
+/**
+ * The one key-value pair ccledger ever writes inside `OTEL_RESOURCE_ATTRIBUTES`.
+ * It exists because Claude Code's own `user.id` telemetry attribute does not
+ * vary with `CLAUDE_CONFIG_DIR` — two profiles on one machine report the same
+ * `user.id` — so distinguishing them at all requires a label Claude Code
+ * actually transmits, and this is the documented mechanism for exactly that.
+ */
+export const PROFILE_ATTRIBUTE_KEY = 'claude_profile';
 
 /**
  * The five switches that make Claude Code export prompt, response and tool
@@ -464,6 +485,240 @@ export function writeEnvEntries(
   const backupPath = takeBackup(settings.path, now);
   writeAtomically(settings.path, updated, settings.mode ?? PRIVATE_FILE_MODE);
   return { path: settings.path, backupPath, createdFile: false, createdEnv };
+}
+
+/**
+ * Parses `OTEL_RESOURCE_ATTRIBUTES`' comma-separated `key=value` pairs, in the
+ * order they appear. A segment with no `=`, or an empty one from a trailing
+ * comma, is skipped rather than rejected — this only ever has to round-trip a
+ * value that already reached Claude Code as a resource attribute, not validate
+ * one from scratch.
+ */
+export function parseResourceAttributes(value: string): Map<string, string> {
+  const pairs = new Map<string, string>();
+  for (const part of value.split(',')) {
+    const trimmed = part.trim();
+    if (trimmed === '') continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    pairs.set(trimmed.slice(0, eq).trim(), trimmed.slice(eq + 1).trim());
+  }
+  return pairs;
+}
+
+/** The inverse of `parseResourceAttributes`: pairs back to comma-joined `key=value` text. */
+export function serializeResourceAttributes(pairs: ReadonlyMap<string, string>): string {
+  return [...pairs].map(([key, value]) => `${key}=${value}`).join(',');
+}
+
+/**
+ * The conflict setting `claude_profile=profileName` would have to overwrite,
+ * if any. Not a conflict when the key is absent, or when it already holds
+ * exactly that pair — writing it again would be a no-op, same rule as
+ * `findEnvConflicts`. A whole value that is not a string is reported as a
+ * conflict too: there is nothing here to merge into.
+ */
+export function profileAttributeConflict(
+  env: Readonly<Record<string, unknown>>,
+  profileName: string,
+): EnvConflict | undefined {
+  if (!Object.hasOwn(env, RESOURCE_ATTRIBUTES_KEY)) return undefined;
+  const current = env[RESOURCE_ATTRIBUTES_KEY];
+  if (typeof current !== 'string') {
+    return {
+      key: RESOURCE_ATTRIBUTES_KEY,
+      current: formatEnvValue(current),
+      wanted: `a string containing ${PROFILE_ATTRIBUTE_KEY}=${profileName}`,
+    };
+  }
+  const existing = parseResourceAttributes(current).get(PROFILE_ATTRIBUTE_KEY);
+  if (existing === undefined || existing === profileName) return undefined;
+  return {
+    key: `${RESOURCE_ATTRIBUTES_KEY} (${PROFILE_ATTRIBUTE_KEY})`,
+    current: existing,
+    wanted: profileName,
+  };
+}
+
+/** What writing the profile attribute did, mirroring `WriteOutcome` for the other five keys. */
+export interface ProfileAttributeOutcome {
+  readonly path: string;
+  readonly backupPath?: string;
+  /** True when ccledger created `OTEL_RESOURCE_ATTRIBUTES` itself, so uninstall may remove it whole. */
+  readonly createdKey: boolean;
+  /** The exact `claude_profile=<value>` text written, for uninstall to verify it is unchanged. */
+  readonly segment: string;
+}
+
+/**
+ * Sets `claude_profile=<profileName>` inside `OTEL_RESOURCE_ATTRIBUTES`,
+ * merging into whatever else is already there instead of owning the whole
+ * value. Call `profileAttributeConflict` first and stop on anything it
+ * reports — this throws the same refusal if the check and the write ever
+ * disagree, the same gap `writeEnvEntries`'s callers already re-check for.
+ */
+export function writeProfileAttribute(
+  settings: SettingsFile,
+  profileName: string,
+  now: number = Date.now(),
+  /**
+   * Skips taking a backup here. Setup calls this right after `writeEnvEntries`
+   * already took one of the true pre-ccledger original, in the same run; a
+   * second backup at the same second-resolution timestamp would either collide
+   * with that filename or, if it did not, would become the one `state.json`
+   * records — and restoring "the backup" would then put back the file with the
+   * five keys already in it rather than the teammate's original file.
+   */
+  skipBackup = false,
+): ProfileAttributeOutcome {
+  const conflict = profileAttributeConflict(settings.env, profileName);
+  if (conflict !== undefined) {
+    throw new SettingsError(
+      `${RESOURCE_ATTRIBUTES_KEY} in ${settings.path} already sets ${conflict.key} to ` +
+        `${conflict.current}; ccledger will not overwrite it. Remove that pair, or run setup for ` +
+        'the profile it already names, then try again.',
+    );
+  }
+
+  const segment = `${PROFILE_ATTRIBUTE_KEY}=${profileName}`;
+  const current = settings.env[RESOURCE_ATTRIBUTES_KEY];
+
+  if (typeof current === 'string') {
+    const pairs = parseResourceAttributes(current);
+    pairs.set(PROFILE_ATTRIBUTE_KEY, profileName);
+    const value = serializeResourceAttributes(pairs);
+
+    const root = scanJsonDocument(settings.text);
+    const envSpan = envSpanOf(settings, root);
+    const member = envSpan === undefined ? undefined : findMember(envSpan, RESOURCE_ATTRIBUTES_KEY);
+    if (member === undefined) {
+      throw new SettingsError(
+        `ccledger could not locate ${RESOURCE_ATTRIBUTES_KEY} in ${settings.path} to edit it. ` +
+          'This is a bug in ccledger; please report it.',
+      );
+    }
+    const updated = replaceMemberValue(settings.text, member, value);
+    reparse(updated, settings.path);
+    const backupPath = skipBackup ? undefined : takeBackup(settings.path, now);
+    writeAtomically(settings.path, updated, settings.mode ?? PRIVATE_FILE_MODE);
+    return {
+      path: settings.path,
+      createdKey: false,
+      segment,
+      ...(backupPath !== undefined ? { backupPath } : {}),
+    };
+  }
+
+  if (skipBackup) {
+    // Same "add a key" edit `writeEnvEntries` performs, without its own
+    // backup: `appendMembers`/`appendObjectMember` plus the atomic write, with
+    // the same round-trip check inlined so a bug here fails loudly rather than
+    // writing something uninstall could not remove again.
+    const root = scanJsonDocument(settings.text);
+    const envSpan = envSpanOf(settings, root);
+    const entries: readonly JsonEntry[] = [{ key: RESOURCE_ATTRIBUTES_KEY, value: segment }];
+    const updated =
+      envSpan === undefined
+        ? appendObjectMember(settings.text, root, ENV_KEY, entries)
+        : appendMembers(settings.text, root, envSpan, entries);
+    const parsed = reparse(updated, settings.path);
+    const expectedEnv = { ...settings.env, [RESOURCE_ATTRIBUTES_KEY]: segment };
+    if (!deepEqualJson(parsed, { ...settings.root, [ENV_KEY]: expectedEnv })) {
+      throw new SettingsError(
+        `the edit ccledger prepared for ${settings.path} would have changed more than ` +
+          `${RESOURCE_ATTRIBUTES_KEY}, so nothing was written. This is a bug in ccledger; please report it.`,
+      );
+    }
+    writeAtomically(settings.path, updated, settings.mode ?? PRIVATE_FILE_MODE);
+    return { path: settings.path, createdKey: true, segment };
+  }
+
+  // Not present yet: reuse the generic add-a-key path, which is safe here
+  // because it round-trip-verifies against exactly the one entry it was given
+  // rather than assuming `OWNED_ENV_KEYS`.
+  const written = writeEnvEntries(
+    settings,
+    [{ key: RESOURCE_ATTRIBUTES_KEY, value: segment }],
+    now,
+  );
+  return {
+    path: written.path,
+    createdKey: true,
+    segment,
+    ...(written.backupPath !== undefined ? { backupPath: written.backupPath } : {}),
+  };
+}
+
+/** What removing the profile attribute did. */
+export interface ProfileAttributeRemoval {
+  readonly path: string;
+  readonly backupPath?: string;
+  readonly removed: boolean;
+  /** True when the whole `OTEL_RESOURCE_ATTRIBUTES` key was taken out, now empty. */
+  readonly removedKey: boolean;
+  /** Set when nothing was removed, saying why. */
+  readonly reason?: string;
+}
+
+/**
+ * Takes `claude_profile=<the value setup wrote>` back out of
+ * `OTEL_RESOURCE_ATTRIBUTES`, leaving every other pair in it untouched — and
+ * leaving the whole thing alone if the pair has changed since setup wrote it,
+ * the same "belongs to whoever changed it now" rule `removeEnvKeys` follows
+ * for the other five keys.
+ */
+export function removeProfileAttribute(
+  settings: SettingsFile,
+  expectedSegment: string,
+  removeKeyIfEmpty: boolean,
+  now: number = Date.now(),
+): ProfileAttributeRemoval {
+  if (!settings.exists) return { path: settings.path, removed: false, removedKey: false };
+
+  const current = settings.env[RESOURCE_ATTRIBUTES_KEY];
+  if (typeof current !== 'string') {
+    return { path: settings.path, removed: false, removedKey: false, reason: 'is not set' };
+  }
+
+  const eq = expectedSegment.indexOf('=');
+  const expectedValue = eq === -1 ? '' : expectedSegment.slice(eq + 1);
+  const pairs = parseResourceAttributes(current);
+  if (pairs.get(PROFILE_ATTRIBUTE_KEY) !== expectedValue) {
+    return {
+      path: settings.path,
+      removed: false,
+      removedKey: false,
+      reason: 'its value has changed since ccledger wrote it',
+    };
+  }
+  pairs.delete(PROFILE_ATTRIBUTE_KEY);
+
+  const root = scanJsonDocument(settings.text);
+  const envSpan = envSpanOf(settings, root);
+  const member = envSpan === undefined ? undefined : findMember(envSpan, RESOURCE_ATTRIBUTES_KEY);
+  if (member === undefined) {
+    return {
+      path: settings.path,
+      removed: false,
+      removedKey: false,
+      reason: 'could not be located',
+    };
+  }
+
+  if (pairs.size === 0 && removeKeyIfEmpty) {
+    const updated = removeOwnedText(settings.text, new Set([RESOURCE_ATTRIBUTES_KEY]), false);
+    reparse(updated, settings.path);
+    const backupPath = takeBackup(settings.path, now);
+    writeAtomically(settings.path, updated, settings.mode ?? PRIVATE_FILE_MODE);
+    return { path: settings.path, backupPath, removed: true, removedKey: true };
+  }
+
+  const value = serializeResourceAttributes(pairs);
+  const updated = replaceMemberValue(settings.text, member, value);
+  reparse(updated, settings.path);
+  const backupPath = takeBackup(settings.path, now);
+  writeAtomically(settings.path, updated, settings.mode ?? PRIVATE_FILE_MODE);
+  return { path: settings.path, backupPath, removed: true, removedKey: false };
 }
 
 /**

@@ -192,6 +192,7 @@ const ROW_001: RequestRow = {
   query_source: 'generate_session_title',
   speed: 'normal',
   effort: null,
+  profile_name: null,
 };
 
 /** The api_request row `002.json` must produce, column for column. */
@@ -213,6 +214,7 @@ const ROW_002: RequestRow = {
   query_source: 'sdk',
   speed: 'normal',
   effort: 'xhigh',
+  profile_name: null,
 };
 
 describe('ingestEvents on the real captures', () => {
@@ -429,6 +431,7 @@ describe('installs upsert', () => {
         terminal_type: 'vscode',
         first_seen: FIRST_FIXTURE_TS,
         last_seen: LAST_FIXTURE_TS,
+        profile_name: null,
       },
     ]);
     const install = must(installRows(db)[0], 'the install row');
@@ -602,6 +605,7 @@ describe('odd but well-formed events', () => {
         query_source: null,
         speed: null,
         effort: null,
+        profile_name: null,
       },
     ]);
   });

@@ -47,6 +47,21 @@ export interface ClientState {
   readonly valueDigests: Readonly<Record<string, string>>;
   /** Epoch milliseconds. */
   readonly installedAt: number;
+  /**
+   * This install's profile name (`.claude`, `.claude-work`, ...), absent on a
+   * record written before profiles existed. Absence is read as the default
+   * profile, `.claude`.
+   */
+  readonly profileName?: string;
+  /**
+   * The exact `claude_profile=<value>` text written into
+   * `OTEL_RESOURCE_ATTRIBUTES`, if any. Not a digest: unlike the token, this
+   * value is not a secret, and uninstall needs to compare it verbatim against
+   * whatever segment is there now.
+   */
+  readonly resourceAttributeSegment?: string;
+  /** True when setup created `OTEL_RESOURCE_ATTRIBUTES` itself, empty until this. */
+  readonly resourceAttributeCreated?: boolean;
 }
 
 /** A state file, the fact there is none, or the reason it could not be used. */
@@ -113,6 +128,8 @@ export function readState(path: string): ReadStateResult {
 
   const backupPath = stringField(parsed, 'backupPath');
   const serverName = stringField(parsed, 'serverName');
+  const profileName = stringField(parsed, 'profileName');
+  const resourceAttributeSegment = stringField(parsed, 'resourceAttributeSegment');
   const installedAt = parsed.installedAt;
   const version = parsed.version;
 
@@ -131,6 +148,9 @@ export function readState(path: string): ReadStateResult {
       installedAt: typeof installedAt === 'number' ? installedAt : 0,
       ...(backupPath !== undefined ? { backupPath } : {}),
       ...(serverName !== undefined ? { serverName } : {}),
+      ...(profileName !== undefined ? { profileName } : {}),
+      ...(resourceAttributeSegment !== undefined ? { resourceAttributeSegment } : {}),
+      ...(parsed.resourceAttributeCreated === true ? { resourceAttributeCreated: true } : {}),
     },
   };
 }
